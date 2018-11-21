@@ -7,7 +7,7 @@
   <description>An Amazon SQS client that supports creating lightweight, automatically-deleted temporary queues, for use in common messaging patterns such as Request/Response. See http://aws.amazon.com/sqs.</description>
   <url>https://github.com/awslabs/amazon-sqs-java-temporary-queues-client</url>
   <scm>
-     <url>https://github.com/aws/amazon-sqs-java-response-client.git</url>
+     <url>https://github.com/aws/amazon-sqs-java-temporary-queues-client.git</url>
   </scm>
   <licenses>
     <license>

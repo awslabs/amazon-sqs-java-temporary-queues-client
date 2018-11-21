@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
@@ -30,6 +31,8 @@ import com.amazonaws.services.sqs.proxy.Base64Serializer;
 import com.amazonaws.services.sqs.proxy.CompletedFutureToMessageSerializer;
 import com.amazonaws.services.sqs.proxy.DefaultSerializer;
 import com.amazonaws.services.sqs.proxy.InvertibleFunction;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.responsesapi.MessageContent;
 import com.amazonaws.util.BinaryUtils;
 import com.amazonaws.util.Md5Utils;
 
@@ -50,7 +53,8 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	private final String executorID; 
     private final Reference reference;	
 	
-	protected final transient AmazonSQS sqs;
+    protected final transient AmazonSQS sqs;
+    protected final transient AmazonSQSWithResponses sqsResponseClient;
 	protected final String queueUrl;
 	private final transient SQSMessageConsumer messageConsumer;
 	
@@ -68,6 +72,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
  
 	public SQSExecutorService(AmazonSQS sqs, String queueUrl, String executorID, InvertibleFunction<Object, String> serializer) {
 		this.sqs = sqs;
+		this.sqsResponseClient = new AmazonSQSNaiveResponsesClient(sqs);
 		this.queueUrl = queueUrl;
 		this.messageConsumer = new SQSMessageConsumer(sqs, queueUrl, this::accept);
 		this.executorID = executorID;
@@ -231,12 +236,12 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		private final boolean withResponse;
 		protected final InvertibleFunction<Future<T>, String> futureSerializer = new CompletedFutureToMessageSerializer<>(serializer);
 	    
-		private String replyQueueUrl;
+		private MessageContent requestMessageContent;
 		
 		// TODO-RS: The response will come either from a message or the deduplication metadata on the tags.
 		// Is there a good way to have the same thread pool do one or the other?
 		private SQSMessageConsumer replyConsumer;
-		private Future<?> deduplicatedResultPollerFuture;
+		private Future<?> resultFuture;
 		
 		public SQSFutureTask(Callable<T> callable, boolean withResponse) {
 			super(callable);
@@ -260,8 +265,8 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		public SQSFutureTask(Callable<T> callable, Message message) {
 			super(callable);
 			this.callable = callable;
-			this.replyQueueUrl = SQSQueueUtils.responseQueueUrl(message);
-			this.withResponse = this.replyQueueUrl != null;
+			this.requestMessageContent = MessageContent.fromMessage(message);
+			this.withResponse = sqsResponseClient.isResponseMessageRequested(requestMessageContent);
 			String uuid = getStringAttributeValue(message, UUID_ATTRIBUTE_NAME);
             String deduplicationID = getStringAttributeValue(message, DEDUPLICATION_ID_ATTRIBUTE_NAME);
 		    metadata = new Metadata(deduplicationID, uuid);
@@ -284,7 +289,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		        if (withResponse) {
     		        // This will immediately complete the future and cancel itself if the metadata
     		        // already has the result set.
-    			    deduplicatedResultPollerFuture = dedupedResultPoller.scheduleWithFixedDelay(
+		            resultFuture = dedupedResultPoller.scheduleWithFixedDelay(
     			            this::pollForResultFromMetadata, 0, 2, TimeUnit.SECONDS);
 		        }
 				return;
@@ -293,10 +298,15 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 			SendMessageRequest request = serialize();
 			
 			if (withResponse) {
-				replyQueueUrl = SQSQueueUtils.sendMessageWithResponseQueue(sqs, request);
-				replyConsumer = new SQSMessageConsumer(sqs, replyQueueUrl, 
-				        message -> setFromResponse(message.getBody()));
-				replyConsumer.start();
+			    CompletableFuture<Message> responseFuture = sqsResponseClient.sendMessageAndGetResponseAsync(request);
+			    responseFuture.whenComplete((result, exception) -> {
+			        if (exception != null) {
+			            setException(exception);
+			        } else {
+			            setFromResponse(result.getBody());
+			        }
+			    });
+			    this.resultFuture = responseFuture;
 			} else {
 				sqs.sendMessage(request);
 			}
@@ -370,21 +380,15 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		
 		@Override
 		protected void done() {
-		    if (replyConsumer != null) {
-		        replyConsumer.shutdown();
-		    }
-		    
-		    if (deduplicatedResultPollerFuture != null) {
-		        deduplicatedResultPollerFuture.cancel(false);
+		    if (resultFuture != null) {
+		        resultFuture.cancel(false);
 		    }
 		    
 		    String response = futureSerializer.apply(this);
             
-			if (replyQueueUrl != null) {
-	            SendMessageRequest responseRequest = new SendMessageRequest()
-	                    .withMessageBody(response)
-	                    .withQueueUrl(replyQueueUrl);
-	            SQSQueueUtils.sendResponse(sqs, responseRequest);
+			if (requestMessageContent != null && sqsResponseClient.isResponseMessageRequested(requestMessageContent)) {
+	            MessageContent responseMessage = new MessageContent(response);
+	            sqsResponseClient.sendResponseMessage(requestMessageContent, responseMessage);
 			}
 			
 			if (metadata.deduplicationID != null || isCancelled()) {

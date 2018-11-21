@@ -26,7 +26,7 @@ public class SQSExecutorWithVirtualQueuesTest {
 
 	private static AmazonSQS sqs;
 	private static String requestQueueUrl;
-    private static AmazonSQSTemporaryQueuesClient rpcClient;
+    private static AmazonSQSResponsesClient rpcClient;
 	private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
@@ -44,7 +44,7 @@ public class SQSExecutorWithVirtualQueuesTest {
                 .build();
         // TODO-RS: Should be temporary queues in tests!
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-        rpcClient = new AmazonSQSTemporaryQueuesClient(sqs, "SQSExecutorWithVirtualQueuesTest");
+        rpcClient = new AmazonSQSResponsesClient(sqs, "SQSExecutorWithVirtualQueuesTest");
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
         taskExceptions.clear();
@@ -79,7 +79,7 @@ public class SQSExecutorWithVirtualQueuesTest {
     
     @Test
     public void parallelMap() throws InterruptedException, ExecutionException, TimeoutException {
-        SQSExecutorService executor = new SQSExecutorService(rpcClient, requestQueueUrl, null);
+        SQSExecutorService executor = new SQSExecutorService(sqs, requestQueueUrl, null);
     	int sum = IntStream.range(0, 10)
     					   .parallel()
     				       .mapToObj(applyIntOn(executor, i -> i * i))

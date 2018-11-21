@@ -4,24 +4,13 @@ import static com.amazonaws.services.sqs.ExecutorUtils.acceptIntOn;
 import static com.amazonaws.services.sqs.ExecutorUtils.acceptOn;
 import static com.amazonaws.services.sqs.ExecutorUtils.applyIntOn;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.util.Base64;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -37,14 +26,10 @@ import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public class SQSQueueUtils {
 
-	public static final String RESPONSE_QUEUE_URL_ATTRIBUTE_NAME = "ResponseQueueUrl";
-	
 	// https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html
     private static final String VALID_QUEUE_NAME_CHARACTERS;
     static {
@@ -123,84 +108,6 @@ public class SQSQueueUtils {
 	    }
     }
     
-    /**
-     * Sends a message and returns the URL of a newly-created queue for its response.
-     * <p>
-     * The response queue should be deleted once the expected response is received
-     * or the need for it has expired.
-     */
-    public static String sendMessageWithResponseQueue(AmazonSQS sqs, SendMessageRequest request) {
-    	String responseQueue = sqs.createQueue(UUID.randomUUID().toString()).getQueueUrl();
-
-    	SendMessageRequest requestWithResponseUrl = copyWithExtraAttributes(request,
-    			Collections.singletonMap(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME, 
-    					new MessageAttributeValue().withDataType("String").withStringValue(responseQueue)));
-    	sqs.sendMessage(requestWithResponseUrl);
-
-    	return responseQueue;
-    }
-    
-    // TODO-RS: Add sendRequestAndGetResponses for multiple response messages?
-    public static Message sendMessageAndGetResponse(AmazonSQS sqs, SendMessageRequest request, int waitTimeSeconds) throws TimeoutException {
-    	return receiveResponse(sqs, sendMessageWithResponseQueue(sqs, request), waitTimeSeconds);
-	}
-	
-    public static CompletableFuture<Message> sendMessageAndGetResponseAsync(AmazonSQS sqs, SendMessageRequest request) {
-    	String responseQueueUrl = sendMessageWithResponseQueue(sqs, request);
-    	
-    	CompletableFuture<Message> future = new CompletableFuture<>();
-    	// TODO-RS: accept an AmazonSQSAsync instead and use its threads instead of our own.
-    	SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, responseQueueUrl, future::complete);
-    	consumer.start();
-    	future.whenComplete((message, exception) -> {
-    		consumer.shutdown();
-    		sqs.deleteQueue(responseQueueUrl);
-    	});
-    	return future;
-    }
-    
-	public static String responseQueueUrl(Message message) {
-    	MessageAttributeValue attribute = message.getMessageAttributes().get(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
-    	return attribute != null ? attribute.getStringValue() : null;
-    }
-    
-    public static void sendResponse(AmazonSQS sqs, Message message, SendMessageRequest request) {
-    	String responseQueueUrl = responseQueueUrl(message);
-    	if (responseQueueUrl != null) {
-    		request.setQueueUrl(responseQueueUrl);
-    		sendResponse(sqs, request);
-    	} else {
-    		// TODO-RS: CW metric and log
-    		System.out.println("warning: tried to send response when none was requested");
-    	}
-    }
-    
-	public static void sendResponse(AmazonSQS sqs, SendMessageRequest request) {
-		try {
-			sqs.sendMessage(request);
-		} catch (QueueDoesNotExistException e) {
-			// Stale request, ignore
-			System.out.println("Ignoring request with deleted reply queue: " + request.getQueueUrl());
-		}
-    }
-    
-	public static Message receiveResponse(AmazonSQS sqs, String responseQueueUrl, int waitTimeSeconds) throws TimeoutException {
-		try {
-			ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-					.withQueueUrl(responseQueueUrl)
-					.withMaxNumberOfMessages(1)
-					.withWaitTimeSeconds(waitTimeSeconds);
-			List<Message> messages = sqs.receiveMessage(receiveRequest).getMessages();
-			if (messages.isEmpty()) {
-				throw new TimeoutException();
-			} else {
-				return messages.get(0);
-			}
-		} finally {
-			sqs.deleteQueue(responseQueueUrl);
-		}
-	}
-	
 	// TODO-RS: The upcoming V2 of the AWS SDK for Java will include versions of API operations
 	// that use CompletableFutures directly. 
 	public static <REQUEST extends AmazonWebServiceRequest, RESULT> Function<REQUEST, CompletableFuture<RESULT>> completable(

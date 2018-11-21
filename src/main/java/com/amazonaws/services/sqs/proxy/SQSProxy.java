@@ -8,6 +8,7 @@ import com.amazonaws.services.sqs.SQSQueueUtils;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.responsesapi.MessageContent;
 
 public class SQSProxy implements Consumer<Message> {
 
@@ -40,7 +41,8 @@ public class SQSProxy implements Consumer<Message> {
 		
         String response = getFutureSerializer(invocation.getMethod().getReturnType()).apply(task);
 		
-		sqs.sendResponseMessage(message, new SendMessageRequest().withMessageBody(response));
+		sqs.sendResponseMessage(MessageContent.fromMessage(message),
+		                        new MessageContent(response));
 	}
 	
 	public Object getResult(Invocation invocation, String response) throws Throwable {

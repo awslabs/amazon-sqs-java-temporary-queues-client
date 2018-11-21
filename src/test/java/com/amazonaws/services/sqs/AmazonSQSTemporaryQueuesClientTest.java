@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Before;
@@ -14,10 +15,11 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.responsesapi.MessageContent;
 
 public class AmazonSQSTemporaryQueuesClientTest {
 	private static AmazonSQS sqs;
-    private static AmazonSQSTemporaryQueuesClient rpcClient;
+    private static AmazonSQSResponsesClient rpcClient;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static List<Throwable> taskExceptions = new ArrayList<>();
     
@@ -31,7 +33,7 @@ public class AmazonSQSTemporaryQueuesClientTest {
                 .withRegion(Regions.US_WEST_2)
 //                .withCredentials(credentialsProvider)
                 .build();
-        rpcClient = new AmazonSQSTemporaryQueuesClient(sqs, "AmazonSQSTemporaryQueuesClientTest");
+        rpcClient = new AmazonSQSResponsesClient(sqs, "AmazonSQSTemporaryQueuesClientTest");
         executors.clear();
         taskExceptions.clear();
     }
@@ -45,27 +47,16 @@ public class AmazonSQSTemporaryQueuesClientTest {
     public void test() throws Exception {
     	String requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     	
-    	new SQSMessageConsumer(rpcClient, requestQueueUrl, message -> {
-    		String replyQueueUrl = SQSQueueUtils.responseQueueUrl(message);
-    		SendMessageRequest request = new SendMessageRequest()
-    			.withQueueUrl(replyQueueUrl)
-				.withMessageBody("Right back atcha buddy!");
-    		SQSQueueUtils.sendResponse(rpcClient, request);
+    	new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
+    		rpcClient.sendResponseMessage(MessageContent.fromMessage(message),
+    		                              new MessageContent("Right back atcha buddy!"));
     	}).start();
     	
     	SendMessageRequest request = new SendMessageRequest()
     			.withMessageBody("Hi there!")
     			.withQueueUrl(requestQueueUrl);
-    	String replyQueueUrl = SQSQueueUtils.sendMessageWithResponseQueue(rpcClient, request);
+    	Message replyMessage = rpcClient.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
     	
-    	ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-				.withQueueUrl(replyQueueUrl)
-				.withWaitTimeSeconds(5);
-		List<Message> messages = rpcClient.receiveMessage(receiveRequest).getMessages();
-		
-		assertEquals(1, messages.size());
-    	assertEquals("Right back atcha buddy!", messages.get(0).getBody());
-		
-    	rpcClient.deleteQueue(replyQueueUrl);
+    	assertEquals("Right back atcha buddy!", replyMessage.getBody());
     }
 }
