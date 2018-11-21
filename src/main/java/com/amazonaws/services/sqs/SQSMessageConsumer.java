@@ -15,41 +15,60 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 public class SQSMessageConsumer {
 	
 	// TODO: Logging!
-	// TODO: Cloudwatch metrics
 	
 	protected final AmazonSQS sqs;
 	protected final String queueUrl;
 	protected final Consumer<Message> consumer;
 	protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+	protected long deadlineNanos = -1;
 	
 	// TODO: batch size, long polling, scale threads up and down...
 	
 	protected final ExecutorService executor;
+	protected final Runnable shutdownHook;
 	
 	public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
-		this(sqs, queueUrl, Executors.newFixedThreadPool(1), consumer);
+	    this(sqs, queueUrl, consumer, () -> {});
 	}
-
-	public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, ExecutorService executor, Consumer<Message> consumer) {
+	
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer, Runnable shutdownHook) {
 		this.sqs = sqs;
 		this.queueUrl = queueUrl;
 		this.consumer = consumer;
-		this.executor = executor;
+		this.executor = Executors.newFixedThreadPool(1);
+		this.shutdownHook = shutdownHook;
 	}
 	
 	public void start() {
 		executor.execute(this::poll);
 	}
 	
-	private void poll() {
+	public void start(long timeout, TimeUnit unit) {
+	    deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
+        start();
+    }
+    
+    private void poll() {
 		for (;;) {
 			if (shuttingDown.get()) {
 				break;
 			}
+			
+			int waitTimeSeconds = 20;
+            if (deadlineNanos > 0) {
+                long currentNanos = System.nanoTime();
+                if (currentNanos >= deadlineNanos) {
+                    shutdown();
+                    break;
+                } else {
+                    int secondsRemaining = (int)TimeUnit.NANOSECONDS.toSeconds(deadlineNanos - currentNanos);
+                    waitTimeSeconds = Math.max(0, Math.min(20, secondsRemaining));
+                }
+            }
 			try {
 				ReceiveMessageRequest request = new ReceiveMessageRequest()
 						.withQueueUrl(queueUrl)
-						.withWaitTimeSeconds(1)
+						.withWaitTimeSeconds(waitTimeSeconds)
 						.withMaxNumberOfMessages(10)
 						.withMessageAttributeNames("All")
 						.withAttributeNames("All");
@@ -66,12 +85,14 @@ public class SQSMessageConsumer {
 					Thread.currentThread().interrupt();
 				}
 			} catch (IllegalStateException e) {
+			    // TODO-RS: This is a hack
 				if ("Connection pool shut down".equals(e.getMessage())) {
 					break;
 				} else {
 					e.printStackTrace();
 				}
 			} catch (Exception e) {
+			    // TODO-RS: Remove
 				e.printStackTrace();
 			}
 		}
@@ -88,18 +109,16 @@ public class SQSMessageConsumer {
 		} catch (QueueDoesNotExistException e) {
 			// Ignore
 		} catch (RuntimeException e) {
+		    // TODO-RS: Logging
 			e.printStackTrace();
-			// TODO: This is only for better testing. We should be assuming temporary failure
-			// by default (i.e. redrive the message) and only delete if we get a recognized
-			// exception type that indicates otherwise.
-//			sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
-			sqs.deleteMessage(queueUrl, message.getReceiptHandle());
+			sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
 		}
 	}
 	
 	public void shutdown() {
 		shuttingDown.set(true);
         executor.shutdown();
+        shutdownHook.run();
     }
 	
 	public boolean isShutdown() {

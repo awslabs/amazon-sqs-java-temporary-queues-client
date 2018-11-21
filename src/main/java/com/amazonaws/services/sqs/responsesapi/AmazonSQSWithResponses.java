@@ -13,13 +13,15 @@ public interface AmazonSQSWithResponses {
      * Sends a message and waits the given amount of time for
      * the response message.
      */
-    public Message sendMessageAndGetResponse(SendMessageRequest request, int timeout, TimeUnit unit) throws TimeoutException;
+    public Message sendMessageAndGetResponse(SendMessageRequest request, 
+            int timeout, TimeUnit unit) throws TimeoutException;
 
     /**
      * Sends a message and returns a <tt>CompletableFuture</tt> 
      * that will be completed with the response message when it arrives.
      */
-    public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request);
+    public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request, 
+            int timeout, TimeUnit unit);
 
     public boolean isResponseMessageRequested(MessageContent requestMessage);
     

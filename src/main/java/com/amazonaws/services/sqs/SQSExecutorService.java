@@ -44,6 +44,9 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 
 	private static final long serialVersionUID = -3415824864452374276L;
 	
+	// TODO-RS: Configuration
+	private static final int MAX_WAIT_TIME_SECONDS = 60;
+	
 	private static final long DEDUPLICATION_WINDOW_MILLIS = TimeUnit.MILLISECONDS.convert(20, TimeUnit.MINUTES);
 	
 	protected static final ThreadLocal<SQSExecutorService> currentDeserializer = new ThreadLocal<>();
@@ -72,7 +75,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
  
 	public SQSExecutorService(AmazonSQS sqs, String queueUrl, String executorID, InvertibleFunction<Object, String> serializer) {
 		this.sqs = sqs;
-		this.sqsResponseClient = new AmazonSQSNaiveResponsesClient(sqs);
+		this.sqsResponseClient = new AmazonSQSResponsesClient(sqs);
 		this.queueUrl = queueUrl;
 		this.messageConsumer = new SQSMessageConsumer(sqs, queueUrl, this::accept);
 		this.executorID = executorID;
@@ -240,7 +243,6 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		
 		// TODO-RS: The response will come either from a message or the deduplication metadata on the tags.
 		// Is there a good way to have the same thread pool do one or the other?
-		private SQSMessageConsumer replyConsumer;
 		private Future<?> resultFuture;
 		
 		public SQSFutureTask(Callable<T> callable, boolean withResponse) {
@@ -298,7 +300,8 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 			SendMessageRequest request = serialize();
 			
 			if (withResponse) {
-			    CompletableFuture<Message> responseFuture = sqsResponseClient.sendMessageAndGetResponseAsync(request);
+			    CompletableFuture<Message> responseFuture = sqsResponseClient.sendMessageAndGetResponseAsync(
+			            request, MAX_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
 			    responseFuture.whenComplete((result, exception) -> {
 			        if (exception != null) {
 			            setException(exception);

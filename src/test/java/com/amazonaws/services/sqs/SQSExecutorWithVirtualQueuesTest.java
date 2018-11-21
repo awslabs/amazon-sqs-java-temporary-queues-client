@@ -6,8 +6,6 @@ import static org.junit.Assert.assertEquals;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -21,12 +19,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 
 public class SQSExecutorWithVirtualQueuesTest {
 
 	private static AmazonSQS sqs;
 	private static String requestQueueUrl;
-    private static AmazonSQSResponsesClient rpcClient;
+    private static AmazonSQSWithResponses rpcClient;
 	private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
@@ -44,7 +43,7 @@ public class SQSExecutorWithVirtualQueuesTest {
                 .build();
         // TODO-RS: Should be temporary queues in tests!
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-        rpcClient = new AmazonSQSResponsesClient(sqs, "SQSExecutorWithVirtualQueuesTest");
+        rpcClient = AmazonSQSResponsesClient.make(sqs, "SQSExecutorWithVirtualQueuesTest");
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
         taskExceptions.clear();

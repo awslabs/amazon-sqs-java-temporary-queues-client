@@ -15,11 +15,12 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.responsesapi.MessageContent;
 
 public class AmazonSQSTemporaryQueuesClientTest {
 	private static AmazonSQS sqs;
-    private static AmazonSQSResponsesClient rpcClient;
+    private static AmazonSQSWithResponses rpcClient;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static List<Throwable> taskExceptions = new ArrayList<>();
     
@@ -33,7 +34,7 @@ public class AmazonSQSTemporaryQueuesClientTest {
                 .withRegion(Regions.US_WEST_2)
 //                .withCredentials(credentialsProvider)
                 .build();
-        rpcClient = new AmazonSQSResponsesClient(sqs, "AmazonSQSTemporaryQueuesClientTest");
+        rpcClient = AmazonSQSResponsesClient.make(sqs, "AmazonSQSTemporaryQueuesClientTest");
         executors.clear();
         taskExceptions.clear();
     }
