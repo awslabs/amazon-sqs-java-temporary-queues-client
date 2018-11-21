@@ -38,7 +38,7 @@ public class CompletedFutureToMessageSerializer<T> implements InvertibleFunction
         } catch (ExecutionException e) {
             return EXCEPTION_PREFIX + exceptionSerializer.apply(e.getCause());
         } catch (CancellationException e) {
-            return CANCELLED_PREFIX + "";
+            return Character.toString(CANCELLED_PREFIX);
         }
     }
     

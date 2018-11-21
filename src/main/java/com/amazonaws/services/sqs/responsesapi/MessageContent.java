@@ -5,6 +5,8 @@ import java.util.Map;
 
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
+import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public class MessageContent {
 
@@ -31,5 +33,13 @@ public class MessageContent {
     
     public Map<String, MessageAttributeValue> getMessageAttributes() {
         return messageAttributes;
+    }
+    
+    public SendMessageRequest toSendMessageRequest() {
+        return new SendMessageRequest().withMessageBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
+    }
+    
+    public SendMessageBatchRequestEntry toSendMessageBatchRequestEntry() {
+        return new SendMessageBatchRequestEntry().withMessageBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
     }
 }

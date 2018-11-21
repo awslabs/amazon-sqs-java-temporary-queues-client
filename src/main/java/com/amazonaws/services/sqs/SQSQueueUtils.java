@@ -107,30 +107,6 @@ public class SQSQueueUtils {
 	    	return queueUrls.stream();
 	    }
     }
-    
-	// TODO-RS: The upcoming V2 of the AWS SDK for Java will include versions of API operations
-	// that use CompletableFutures directly. 
-	public static <REQUEST extends AmazonWebServiceRequest, RESULT> Function<REQUEST, CompletableFuture<RESULT>> completable(
-				BiFunction<REQUEST, AsyncHandler<REQUEST, RESULT>, Future<RESULT>> operation) {
-
-		return request -> {
-			CompletableFuture<RESULT> future = new CompletableFuture<>();
-			
-			operation.apply(request, new AsyncHandler<REQUEST, RESULT>() {
-				@Override
-				public void onSuccess(REQUEST request, RESULT result) {
-					future.complete(result);
-				}
-				
-				@Override
-				public void onError(Exception exception) {
-					future.completeExceptionally(exception);
-				}
-			});
-			
-			return future;
-		};
-	}
 	
     public static CreateQueueRequest copyWithExtraAttributes(CreateQueueRequest request, Map<String, String> extraAttrs) {
         Map<String, String> newAttributes = new HashMap<>(request.getAttributes());
@@ -152,11 +128,5 @@ public class SQSQueueUtils {
                       .withMessageBody(request.getMessageBody())
                       .withMessageAttributes(newAttributes)
                       .withDelaySeconds(request.getDelaySeconds());
-    }
-    
-    public static SendMessageRequest sendMessageRequest(Message message) {
-        return new SendMessageRequest()
-                .withMessageBody(message.getBody())
-                .withMessageAttributes(message.getMessageAttributes());
     }
 }

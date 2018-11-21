@@ -61,7 +61,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	protected final String queueUrl;
 	private final transient SQSMessageConsumer messageConsumer;
 	
-	private final ScheduledExecutorService dedupedResultPoller = Executors.newScheduledThreadPool(1);
+	private final transient ScheduledExecutorService dedupedResultPoller = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 	
@@ -84,7 +84,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		if (executorID != null) {
 			SQSExecutorService existingExecutor = executorsByID.putIfAbsent(executorID, this);
 			if (existingExecutor != null) {
-				throw new IllegalStateException("An SQSExecutor has already been created with the ID " + executorID + ": " + existingExecutor);
+				throw new IllegalStateException("An SQSExecutorService has already been created with the ID " + executorID + ": " + existingExecutor);
 			}
 		}
 		this.messageConsumer.start();

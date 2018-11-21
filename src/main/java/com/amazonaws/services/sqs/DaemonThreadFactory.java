@@ -19,5 +19,4 @@ public class DaemonThreadFactory implements ThreadFactory {
         thread.setName(factoryID + "-Thread-" + threadNumber);
         return thread;
     }
-
 }
