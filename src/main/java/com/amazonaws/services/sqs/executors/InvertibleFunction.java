@@ -25,38 +25,38 @@ public interface InvertibleFunction<T, R> {
     /**
      * Applies this function to the given argument.
      */
-	R apply(T t);
-	
-	/**
+    R apply(T t);
+
+    /**
      * Applies the inverse of this function to the given argument.
      */
-	T unapply(R r);
-	
-	/**
-	 * Constructs an {@link InvertibleFunction} from the given functions.
-	 */
-	static <T, R> InvertibleFunction<T, R> of(Function<T, R> function, Function<? super R, ? extends T> inverse) {
-		return new InvertibleFunction<T, R>() {
-			@Override
-			public R apply(T t) {
-				return function.apply(t);
-			}
-			@Override
-			public T unapply(R r) {
-				return inverse.apply(r);
-			}
-		};
-	}
-	
-	/**
-	 * Inverts this function. Calling {@link #apply(Object)} on the result is equivalent to
-	 * calling {@link #unapply(Object)} on this function, and vice versa.
-	 */
-	default InvertibleFunction<R, T> inverse() {
-		return of(this::unapply, this::apply);
-	}
-	
-	/**
+    T unapply(R r);
+
+    /**
+     * Constructs an {@link InvertibleFunction} from the given functions.
+     */
+    static <T, R> InvertibleFunction<T, R> of(Function<T, R> function, Function<? super R, ? extends T> inverse) {
+        return new InvertibleFunction<T, R>() {
+            @Override
+            public R apply(T t) {
+                return function.apply(t);
+            }
+            @Override
+            public T unapply(R r) {
+                return inverse.apply(r);
+            }
+        };
+    }
+
+    /**
+     * Inverts this function. Calling {@link #apply(Object)} on the result is equivalent to
+     * calling {@link #unapply(Object)} on this function, and vice versa.
+     */
+    default InvertibleFunction<R, T> inverse() {
+        return of(this::unapply, this::apply);
+    }
+
+    /**
      * Returns a composed invertible function that first applies the {@code before}
      * function to its input, and then applies this function to the result.
      * If evaluation of either function throws an exception, it is relayed to
@@ -74,7 +74,7 @@ public interface InvertibleFunction<T, R> {
     default <V> InvertibleFunction<V, R> compose(InvertibleFunction<V, T> before) {
         Objects.requireNonNull(before);
         return of(v -> apply(before.apply(v)),
-      		      t -> before.unapply(unapply(t)));
+                  t -> before.unapply(unapply(t)));
     }
 
     /**
@@ -95,7 +95,7 @@ public interface InvertibleFunction<T, R> {
     default <V> InvertibleFunction<T, V> andThen(InvertibleFunction<R, V> after) {
         Objects.requireNonNull(after);
         return of(t -> after.apply(apply(t)),
-        		  v -> unapply(after.unapply(v)));
+                  v -> unapply(after.unapply(v)));
     }
 
     /**
@@ -104,14 +104,14 @@ public interface InvertibleFunction<T, R> {
     static <T> InvertibleFunction<T, T> identity() {
         return of(Function.identity(), Function.identity());
     }
-    
+
     /**
      * An {@link InvertibleFunction} representing a downcasting operation.
      */
     static <T, R extends T> InvertibleFunction<T, R> cast(Class<R> klass) {
         return of(klass::cast, r -> r);
     }
-    
+
     /**
      * An {@link InvertibleFunction} representing an unchecked cast.
      */

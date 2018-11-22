@@ -20,37 +20,37 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-@SuppressWarnings("squid:S2055")
+@SuppressWarnings("squid:S2055") // SonarLint exception for the custom serialization approach.
 class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializable {
-	
+
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
 
     private final SerializableReference<IdleQueueSweeper> thisReference;
-    
-    public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
-		super(sqs, queueUrl);
-		// TODO-RS: Need to build a full queue URL prefix for this, to include
-		// the account too.
-		thisReference = new SerializableReference<>(queueNamePrefix, this);
-		
-		// Jitter the startup times to avoid throttling on tagging as much as possible.
-		long initialDelay = ThreadLocalRandom.current().nextLong(period);
-		
-		// TODO-RS: Invoke this repeatedly over time to ensure the task is reset
-		// if it ever dies for any reason.
-        repeatAtFixedRate(deduplicated(() -> checkQueuesForIdleness(queueNamePrefix)), 
-                          initialDelay, period, unit);
-	}
 
-	protected void checkQueuesForIdleness(String prefix) {
-		try {
-			forEachQueue(this, sqs, prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
-		} catch (Exception e) {
-			// Make sure the recurring task never throws so it doesn't terminate.
-			LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
-		}
+    public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
+        super(sqs, queueUrl);
+        // TODO-RS: Need to build a full queue URL prefix for this, to include
+        // the account too.
+        thisReference = new SerializableReference<>(queueNamePrefix, this);
+
+        // Jitter the startup times to avoid throttling on tagging as much as possible.
+        long initialDelay = ThreadLocalRandom.current().nextLong(period);
+
+        // TODO-RS: Invoke this repeatedly over time to ensure the task is reset
+        // if it ever dies for any reason.
+        repeatAtFixedRate(deduplicated(() -> checkQueuesForIdleness(queueNamePrefix)), 
+                initialDelay, period, unit);
     }
-    
+
+    protected void checkQueuesForIdleness(String prefix) {
+        try {
+            forEachQueue(this, sqs, prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
+        } catch (Exception e) {
+            // Make sure the recurring task never throws so it doesn't terminate.
+            LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
+        }
+    }
+
     protected void checkQueueForIdleness(String queueUrl) {
         try {
             if (isQueueIdle(queueUrl) && SQSQueueUtils.isQueueEmpty(sqs, queueUrl)) {
@@ -60,7 +60,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
             // Queue already deleted so nothing to do.
         }
     }
-    
+
     private boolean isQueueIdle(String queueUrl) {
         Map<String, String> queueTags = sqs.listQueueTags(queueUrl).getTags();
         Long lastHeartbeat = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP);
@@ -68,14 +68,14 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
         long currentTimestamp = System.currentTimeMillis();
 
         return idleQueueRetentionPeriod != null && 
-        	   (lastHeartbeat == null || 
-        		(currentTimestamp - lastHeartbeat) > idleQueueRetentionPeriod * 1000);
+                (lastHeartbeat == null || 
+                (currentTimestamp - lastHeartbeat) > idleQueueRetentionPeriod * 1000);
     }
-    
+
     protected Object writeReplace() throws ObjectStreamException {
         return thisReference;
     }
-    
+
     @Override
     public void shutdown() {
         thisReference.close();

@@ -36,7 +36,7 @@ import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
-    
+
     private static AmazonSQS sqs;
     private static AmazonSQSWithResponses sqsResponseClient;
     private static String queueUrl;
@@ -44,12 +44,12 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     private static AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
     private static List<Throwable> taskExceptions = new ArrayList<>();
-    
+
     private static class SQSScheduledExecutorWithAssertions extends SQSScheduledExecutorService implements Serializable {
-        
+
         ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
         SerializableReference<SQSExecutorService> thisExecutor;
-        
+
         public SQSScheduledExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl) {
             super(sqs, queueUrl);
             thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
@@ -59,7 +59,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         protected SQSFutureTask<?> deserializeTask(Message message) {
             return thisExecutor.withScope(localScope, () -> super.deserializeTask(message));
         }
-        
+
         @Override
         protected void afterExecute(Runnable r, Throwable t) {
             if (t != null) {
@@ -67,12 +67,12 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
                 t.printStackTrace();
             }
         }
-        
+
         protected Object writeReplace() throws ObjectStreamException {
             return thisExecutor;
         }
     }
-    
+
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard()
@@ -84,7 +84,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         executors.clear();
         taskExceptions.clear();
     }
-    
+
     @After
     public void teardown() throws InterruptedException {
         boolean allShutdown = executors.parallelStream().allMatch(this::shutdownExecutor);
@@ -95,7 +95,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         }
         assertTrue(allShutdown);
     }
-    
+
     private boolean shutdownExecutor(SQSExecutorService executor) {
         try {
             executor.shutdown();
@@ -105,13 +105,13 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
             return false;
         }
     }
-    
+
     private SQSScheduledExecutorService createScheduledExecutor(String queueUrl) {
         SQSScheduledExecutorService executor = new SQSScheduledExecutorWithAssertions(sqsResponseClient, queueUrl);
         executors.add(executor);
         return executor;
     }
-    
+
     private static void seed(Executor executor) {
         seedCount.incrementAndGet();
         IntStream.range(0, 5)
@@ -120,27 +120,27 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
                      executor.execute((SerializableRunnable)() -> sweepParent(executor, y)); 
                  });
     }
-    
+
     private static void sweepParent(Executor executor, int number) {
         IntStream.range(number + 1, number + 5).forEach(x -> {
             executor.execute((SerializableRunnable)() -> sweepLeaf(executor, x));
         });
     }
-    
+
     private static void sweepLeaf(Executor executor, int number) {
         if (tasksCompletedLatch.getCount() == 0) {
             throw new IllegalStateException("Too many leaves swept!");
         }
         tasksCompletedLatch.countDown();
     }
-    
+
     @Test
     public void singleDelayedTask() throws InterruptedException {
         SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
         executor.delayedExecute(serializable(() -> tasksCompletedLatch.countDown()), 1, TimeUnit.SECONDS);
         assertTrue(tasksCompletedLatch.await(5, TimeUnit.SECONDS));
     }
-    
+
     @Test
     public void taskThatSpawnsTasksMultipleExecutors() throws InterruptedException {
         tasksCompletedLatch = new CountDownLatch(20);
@@ -152,7 +152,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
                 executor.delayedExecute(deduplicated(() -> seed(executor)), 1, TimeUnit.SECONDS));
         assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
     }
-    
+
     private static void slowTask() {
         try {
             Thread.sleep(2000);
@@ -161,7 +161,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         }
         tasksCompletedLatch.countDown();
     }
-    
+
     @Test
     public void scheduleAtFixedRate() throws InterruptedException, ExecutionException {
         tasksCompletedLatch = new CountDownLatch(3);
@@ -180,7 +180,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
             // Expected
         }
     }
-    
+
     @Test
     public void scheduleWithFixedDelay() throws InterruptedException, ExecutionException {
         tasksCompletedLatch = new CountDownLatch(3);

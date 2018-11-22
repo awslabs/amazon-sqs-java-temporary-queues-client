@@ -3,7 +3,7 @@ package com.amazonaws.services.sqs.executors;
 import java.util.Base64;
 
 public enum Base64Serializer implements InvertibleFunction<byte[], String>{
-    
+
     INSTANCE {
         @Override
         public String apply(byte[] src) {

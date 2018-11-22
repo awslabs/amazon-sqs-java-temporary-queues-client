@@ -18,11 +18,11 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final String HOST_QUEUE_NAME_PREFIX = "__HostQueue";
-    
+
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
-    
+
     private final String prefix;
-    
+
     AmazonSQSTemporaryQueuesClient(AmazonSQS sqs) {
         // TODO-RS: Be smarter about this: include host name, etc.
         this(sqs, UUID.randomUUID().toString());
@@ -32,15 +32,15 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         super(sqs);
         this.prefix = HOST_QUEUE_NAME_PREFIX + "_" + clientId + "_";
     }
-    
+
     static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs) {
         return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs));
     }
-    
+
     static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs, String clientId) {
         return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs), clientId);
     }
-    
+
     private static AmazonSQS makeWrappedClient(AmazonSQS sqs) {
         // TODO-RS: Determine the right strategy for naming the sweeping queue.
         // It needs to be shared between different clients, but testing friendly!
@@ -55,7 +55,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(new AmazonSQSResponsesClient(sqs), HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
         return new AmazonSQSVirtualQueuesClient(deleter);
     }
-    
+
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
@@ -64,10 +64,10 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         });
         CreateQueueRequest createVirtualQueueRequest = SQSQueueUtils.copyWithExtraAttributes(request, 
                 Collections.singletonMap(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE,
-                                         hostQueueUrl));
+                        hostQueueUrl));
         return amazonSqsToBeExtended.createQueue(createVirtualQueueRequest);
     }
-    
+
     @Override
     public void shutdown() {
         try {

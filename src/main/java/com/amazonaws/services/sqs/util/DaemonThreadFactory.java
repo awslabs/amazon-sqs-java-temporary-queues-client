@@ -7,11 +7,11 @@ public class DaemonThreadFactory implements ThreadFactory {
     static AtomicInteger threadCount = new AtomicInteger(0);
 
     private final String factoryID;
-    
+
     public DaemonThreadFactory(String factoryID) {
-    	this.factoryID = factoryID;
+        this.factoryID = factoryID;
     }
-    
+
     public Thread newThread(Runnable r) {
         int threadNumber = threadCount.addAndGet(1);
         Thread thread = new Thread(r);

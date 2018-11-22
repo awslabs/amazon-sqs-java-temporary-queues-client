@@ -62,9 +62,9 @@ public class ReceiveQueueBuffer {
     private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
 
     private static final Queue<Message> EMPTY_DEQUE = new ArrayDeque<Message>();
-    
+
     private final ScheduledExecutorService waitTimer = Executors.newSingleThreadScheduledExecutor();
-    
+
     private final AmazonSQS sqsClient;
 
     /**
@@ -78,7 +78,7 @@ public class ReceiveQueueBuffer {
      * according to when the synchronous call to SQS would have.
      */
     private final long defaultWaitTimeNanos;
-    
+
     /** shutdown buffer does not retrieve any more messages from sqs */
     volatile boolean shutDown = false;
 
@@ -93,22 +93,22 @@ public class ReceiveQueueBuffer {
         if (queueUrl.endsWith(".fifo")) {
             throw new IllegalArgumentException("FIFO queues are not yet supported: " + queueUrl);
         }
-        
+
         GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest().withQueueUrl(queueUrl)
                 .withAttributeNames(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
-                					QueueAttributeName.VisibilityTimeout.toString());
+                        QueueAttributeName.VisibilityTimeout.toString());
         // TODO-RS: UserAgent?
         Map<String, String> attributes = sqsClient.getQueueAttributes(getQueueAttributesRequest).getAttributes();
-		long visibilityTimeoutSeconds = Long.parseLong(attributes.get("VisibilityTimeout"));
+        long visibilityTimeoutSeconds = Long.parseLong(attributes.get("VisibilityTimeout"));
         defaultVisibilityTimeoutNanos = TimeUnit.SECONDS.toNanos(visibilityTimeoutSeconds);
         long waitTimeSeconds = Long.parseLong(attributes.get("ReceiveMessageWaitTimeSeconds"));
         defaultWaitTimeNanos = TimeUnit.SECONDS.toNanos(waitTimeSeconds);
     }
 
     public ReceiveQueueBuffer(ReceiveQueueBuffer other) {
-    	this.sqsClient = other.sqsClient;
-    	this.defaultWaitTimeNanos = other.defaultWaitTimeNanos;
-    	this.defaultVisibilityTimeoutNanos = other.defaultVisibilityTimeoutNanos;
+        this.sqsClient = other.sqsClient;
+        this.defaultWaitTimeNanos = other.defaultWaitTimeNanos;
+        this.defaultVisibilityTimeoutNanos = other.defaultVisibilityTimeoutNanos;
     }
 
     /**
@@ -118,7 +118,7 @@ public class ReceiveQueueBuffer {
         shutDown = true;
         clear();
     }
-    
+
     /**
      * Submits the request for retrieval of messages from the queue and returns a future that will
      * be signalled when the request is satisfied. The future may already be signalled by the time
@@ -138,17 +138,17 @@ public class ReceiveQueueBuffer {
         }
         long waitTimeNanos;
         if (rq.getWaitTimeSeconds() != null) {
-        	waitTimeNanos = TimeUnit.SECONDS.toNanos(rq.getWaitTimeSeconds());
+            waitTimeNanos = TimeUnit.SECONDS.toNanos(rq.getWaitTimeSeconds());
         } else {
-        	waitTimeNanos = defaultWaitTimeNanos;
+            waitTimeNanos = defaultWaitTimeNanos;
         }
         ReceiveMessageFuture toReturn = issueFuture(numMessages, waitTimeNanos);
 
         // attempt to satisfy it right away...
         satisfyFuturesFromBuffer();
-        
+
         toReturn.startWaitTimer();
-        
+
         return toReturn;
     }
 
@@ -174,7 +174,7 @@ public class ReceiveQueueBuffer {
         synchronized (futures) {
             synchronized (finishedTasks) {
                 pruneExpiredFutures();
-                
+
                 // attempt to satisfy futures until we run out of either futures or
                 // finished tasks
                 Iterator<ReceiveMessageFuture> futureIter = futures.iterator(); 
@@ -228,7 +228,7 @@ public class ReceiveQueueBuffer {
                 }
             }
         }
-        
+
         if (!future.messages.isEmpty() || future.isExpired()) {
             future.complete();
             return true;
@@ -284,35 +284,35 @@ public class ReceiveQueueBuffer {
             }
         }
     }
-    
+
     public void deliverMessages(List<Message> messages, String sourceQueueUrl, Integer visibilityTimeoutNanosOverride) {
-    	submit(Runnable::run, () -> messages, sourceQueueUrl, visibilityTimeoutNanosOverride);
+        submit(Runnable::run, () -> messages, sourceQueueUrl, visibilityTimeoutNanosOverride);
     }
 
     public void deliverException(Exception exception) {
-    	submit(Runnable::run, () -> {throw exception;}, null, 0);
+        submit(Runnable::run, () -> {throw exception;}, null, 0);
     }
-    
+
     public void submit(Executor executor, Callable<List<Message>> callable, String queueUrl, Integer visibilityTimeoutSecondsOverride) {
         long visibilityTimeoutNanos;
-    	if (visibilityTimeoutSecondsOverride == null) {
-    		visibilityTimeoutNanos = defaultVisibilityTimeoutNanos;
-    	} else {
-    		visibilityTimeoutNanos = TimeUnit.SECONDS.toNanos(visibilityTimeoutSecondsOverride);
-    	}
-    	ReceiveMessageBatchTask task = new ReceiveMessageBatchTask(callable, queueUrl, visibilityTimeoutNanos);
+        if (visibilityTimeoutSecondsOverride == null) {
+            visibilityTimeoutNanos = defaultVisibilityTimeoutNanos;
+        } else {
+            visibilityTimeoutNanos = TimeUnit.SECONDS.toNanos(visibilityTimeoutSecondsOverride);
+        }
+        ReceiveMessageBatchTask task = new ReceiveMessageBatchTask(callable, queueUrl, visibilityTimeoutNanos);
         executor.execute(task);
     }
-    
+
     /**
      * This method is called by the batches after they have finished retrieving the messages.
      */
     void reportBatchFinished(ReceiveMessageBatchTask batch) {
-    	if (shutDown) {
-    		batch.clear();
-    		return;
-    	}
-    	
+        if (shutDown) {
+            batch.clear();
+            return;
+        }
+
         synchronized (finishedTasks) {
             finishedTasks.addLast(batch);
         }
@@ -344,20 +344,20 @@ public class ReceiveQueueBuffer {
         private final int requestedSize;
 
         private final List<Message> messages;
-        
+
         private final Long waitTimeDeadlineNano;
         private Future<?> timeoutFuture;
-        
+
         ReceiveMessageFuture(int paramSize, Long waitTimeNanos) {
             requestedSize = paramSize;
             messages = new ArrayList<>(requestedSize);
-            
+
             if (waitTimeNanos != null) {
                 this.waitTimeDeadlineNano = System.nanoTime() + waitTimeNanos;
             } else {
                 this.waitTimeDeadlineNano = null;
             }
-            
+
             whenComplete((result, exception) -> cancelTimeout());
         }
 
@@ -365,7 +365,7 @@ public class ReceiveQueueBuffer {
             if (waitTimeDeadlineNano == null || isDone() || timeoutFuture != null) {
                 return;
             }
-            
+
             long remaining = waitTimeDeadlineNano - System.nanoTime();
             if (remaining < 0) {
                 timeout();
@@ -373,11 +373,11 @@ public class ReceiveQueueBuffer {
                 timeoutFuture = waitTimer.schedule(this::timeout, remaining, TimeUnit.NANOSECONDS);
             }
         }
-        
+
         public boolean isExpired() {
             return waitTimeDeadlineNano != null && System.nanoTime() > waitTimeDeadlineNano;
         }
-        
+
         public synchronized void addMessage(Message message) {
             if (isDone()) {
                 throw new IllegalStateException("Future is already completed");
@@ -390,17 +390,17 @@ public class ReceiveQueueBuffer {
                 complete();
             }
         }
-        
+
         public boolean isFull() {
             return messages.size() >= requestedSize;
         }
-        
+
         public synchronized void timeout() {
             if (!isDone()) {
                 complete();
             }
         }
-        
+
         public synchronized void complete() {
             if (!isDone()) {
                 ReceiveMessageResult result = new ReceiveMessageResult();
@@ -408,7 +408,7 @@ public class ReceiveQueueBuffer {
                 complete(result);
             }
         }
-        
+
         private synchronized void cancelTimeout() {
             if (timeoutFuture != null) {
                 timeoutFuture.cancel(false);
@@ -423,7 +423,7 @@ public class ReceiveQueueBuffer {
      * that point, the batch opens and its messages (if any) become available to read.
      */
     protected class ReceiveMessageBatchTask extends FutureTask<List<Message>> {
-    	private Exception exception = null;
+        private Exception exception = null;
         protected Queue<Message> messages;
         private final String sourceQueueUrl;
         private final long visibilityTimeoutNanos;
@@ -437,16 +437,16 @@ public class ReceiveQueueBuffer {
          *            the time to wait before calling SQS
          */
         ReceiveMessageBatchTask(Callable<List<Message>> callable, String sourceQueueUrl, long visibilityTimeoutNanos) {
-        	super(callable);
-        	this.sourceQueueUrl = sourceQueueUrl;
-        	this.visibilityTimeoutNanos = visibilityTimeoutNanos;
+            super(callable);
+            this.sourceQueueUrl = sourceQueueUrl;
+            this.visibilityTimeoutNanos = visibilityTimeoutNanos;
             messages = EMPTY_DEQUE;
         }
-        
+
         synchronized boolean isEmpty() {
-        	if (!isDone()) {
-        		throw new IllegalStateException();
-        	}
+            if (!isDone()) {
+                throw new IllegalStateException();
+            }
             return messages.isEmpty();
         }
 
@@ -454,10 +454,10 @@ public class ReceiveQueueBuffer {
          * @return the exception that was thrown during execution, or null if there was no exception
          */
         synchronized Exception getException() {
-        	if (!isDone()) {
-        		throw new IllegalStateException();
-        	}
-        	return exception;
+            if (!isDone()) {
+                throw new IllegalStateException();
+            }
+            return exception;
         }
 
 
@@ -475,19 +475,19 @@ public class ReceiveQueueBuffer {
             if (messages.isEmpty()) {
                 return;
             }
-            
+
             for (Iterator<Message> iter = messages.iterator(); iter.hasNext() && !future.isFull();) {
                 Message message = iter.next();
                 iter.remove();
                 future.addMessage(message);
             }
         }
-        
+
         public synchronized void startExpiryTimer() {
             if (isExpired() || expiryFuture != null) {
                 return;
             }
-            
+
             long remaining = visibilityDeadlineNano - System.nanoTime();
             if (remaining < 0) {
                 clear();
@@ -495,7 +495,7 @@ public class ReceiveQueueBuffer {
                 expiryFuture = waitTimer.schedule(this::clear, remaining, TimeUnit.NANOSECONDS);
             }
         }
-        
+
         boolean isExpired() {
             return System.nanoTime() > visibilityDeadlineNano;
         }
@@ -511,7 +511,7 @@ public class ReceiveQueueBuffer {
             if (expiryFuture != null) {
                 expiryFuture.cancel(false);
             }
-            
+
             if (!isExpired()) {
                 nackMessages(messages);
             }
@@ -522,7 +522,7 @@ public class ReceiveQueueBuffer {
             if (messages.isEmpty()) {
                 return;
             }
-            
+
             ChangeMessageVisibilityBatchRequest batchRequest = new ChangeMessageVisibilityBatchRequest().withQueueUrl(sourceQueueUrl);
             // TODO-RS: UserAgent?
 
@@ -545,17 +545,17 @@ public class ReceiveQueueBuffer {
                 LOG.warn("ReceiveMessageBatchTask: changeMessageVisibility failed " + e);
             }
         }
-        
+
         @Override
         protected void set(List<Message> v) {
-        	messages = new ArrayDeque<Message>(v);
-        	visibilityDeadlineNano = System.nanoTime() + visibilityTimeoutNanos;
-        	super.set(v);
+            messages = new ArrayDeque<Message>(v);
+            visibilityDeadlineNano = System.nanoTime() + visibilityTimeoutNanos;
+            super.set(v);
         }
-        
+
         @Override
         protected void done() {
-        	reportBatchFinished(this);
+            reportBatchFinished(this);
         }
     }
 }

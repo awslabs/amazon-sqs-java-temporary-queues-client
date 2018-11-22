@@ -18,9 +18,9 @@ import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class AmazonSQSResponsesClientTest extends TestUtils {
-	private static AmazonSQS sqs;
+    private static AmazonSQS sqs;
     private static AmazonSQSWithResponses rpcClient;
-    
+
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard()
@@ -28,26 +28,26 @@ public class AmazonSQSResponsesClientTest extends TestUtils {
                 .build();
         rpcClient = AmazonSQSResponsesClient.make(sqs, "AmazonSQSResponsesClientTest");
     }
-    
+
     @After
     public void teardown() throws InterruptedException {
         rpcClient.shutdown();
     }
-    
+
     @Test
     public void test() throws Exception {
-    	String requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-    	
-    	new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
-    		rpcClient.sendResponseMessage(MessageContent.fromMessage(message),
-    		                              new MessageContent("Right back atcha buddy!"));
-    	}).start();
-    	
-    	SendMessageRequest request = new SendMessageRequest()
-    			.withMessageBody("Hi there!")
-    			.withQueueUrl(requestQueueUrl);
-    	Message replyMessage = rpcClient.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
-    	
-    	assertEquals("Right back atcha buddy!", replyMessage.getBody());
+        String requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
+
+        new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
+            rpcClient.sendResponseMessage(MessageContent.fromMessage(message),
+                    new MessageContent("Right back atcha buddy!"));
+        }).start();
+
+        SendMessageRequest request = new SendMessageRequest()
+                .withMessageBody("Hi there!")
+                .withQueueUrl(requestQueueUrl);
+        Message replyMessage = rpcClient.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
+
+        assertEquals("Right back atcha buddy!", replyMessage.getBody());
     }
 }

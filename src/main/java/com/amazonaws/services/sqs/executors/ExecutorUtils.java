@@ -12,64 +12,64 @@ import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 
 public class ExecutorUtils {
-    
-	private static class FutureGetter<V> implements ForkJoinPool.ManagedBlocker {
 
-    	private final Future<V> future;
-    	
-    	public FutureGetter(Future<V> future) {
-    		this.future = future;
-    	}
-    	
-		@Override
-		public boolean block() throws InterruptedException {
-			try {
-				future.get();
+    private static class FutureGetter<V> implements ForkJoinPool.ManagedBlocker {
+
+        private final Future<V> future;
+
+        public FutureGetter(Future<V> future) {
+            this.future = future;
+        }
+
+        @Override
+        public boolean block() throws InterruptedException {
+            try {
+                future.get();
             } catch (CancellationException|ExecutionException ignore) {
-            	// Ignore
+                // Ignore
             }
-			return true;
-		}
+            return true;
+        }
 
-		@Override
-		public boolean isReleasable() {
-			return future.isDone();
-		}
+        @Override
+        public boolean isReleasable() {
+            return future.isDone();
+        }
     }
-    
-	public static <T> T getOn(ExecutorService executor, SerializableSupplier<T> supplier) {
-    	Future<T> future = executor.submit(SerializableCallable.serializable(supplier::get));
-    	for (;;) {
-	    	try {
-	    		// managedBlock will check this anyway, but it saves the extra object construction
-	        	// when not running in a pool.
-	        	if (ForkJoinTask.inForkJoinPool()) {
-	        		ForkJoinPool.managedBlock(new FutureGetter<>(future));
-	        	}
-	    		return future.get();
-			} catch (ExecutionException e) {
-				// Accepting only Suppliers rather than Callables ensures that
-				// only RuntimeExceptions are expected here.
-				throw (RuntimeException)e.getCause();
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-    	}
+
+    public static <T> T getOn(ExecutorService executor, SerializableSupplier<T> supplier) {
+        Future<T> future = executor.submit(SerializableCallable.serializable(supplier::get));
+        for (;;) {
+            try {
+                // managedBlock will check this anyway, but it saves the extra object construction
+                // when not running in a pool.
+                if (ForkJoinTask.inForkJoinPool()) {
+                    ForkJoinPool.managedBlock(new FutureGetter<>(future));
+                }
+                return future.get();
+            } catch (ExecutionException e) {
+                // Accepting only Suppliers rather than Callables ensures that
+                // only RuntimeExceptions are expected here.
+                throw (RuntimeException)e.getCause();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
-    
+
     public static <T, R> Function<T, R> applyOn(ExecutorService executor, Function<T, R> fn) {
-    	return x -> getOn(executor, () -> fn.apply(x));
+        return x -> getOn(executor, () -> fn.apply(x));
     }
 
     public static <T> IntFunction<T> applyIntOn(ExecutorService executor, SerializableIntFunction<T> fn) {
-    	return x -> getOn(executor, () -> fn.apply(x));
+        return x -> getOn(executor, () -> fn.apply(x));
     }
 
     public static <T> Consumer<T> acceptOn(ExecutorService executor, Consumer<T> consumer) {
-    	return x -> getOn(executor, () -> {consumer.accept(x); return null;});
+        return x -> getOn(executor, () -> {consumer.accept(x); return null;});
     }
-    
+
     public static IntConsumer acceptIntOn(ExecutorService executor, IntConsumer consumer) {
-    	return x -> getOn(executor, () -> {consumer.accept(x); return null;});
+        return x -> getOn(executor, () -> {consumer.accept(x); return null;});
     }
 }

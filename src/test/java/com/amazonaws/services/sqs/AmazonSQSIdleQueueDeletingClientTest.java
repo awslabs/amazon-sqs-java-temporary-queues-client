@@ -8,6 +8,6 @@ public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
 
     @Test
     public void queueRecreation() {
-        
+        // TODO-RS
     }
 }
