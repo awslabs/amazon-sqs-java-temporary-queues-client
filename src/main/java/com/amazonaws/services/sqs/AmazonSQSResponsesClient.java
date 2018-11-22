@@ -159,6 +159,6 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
 	
 	@Override
 	public void shutdown() {
-	    // Currently a no-op
+	    sqs.shutdown();
 	}
 }
