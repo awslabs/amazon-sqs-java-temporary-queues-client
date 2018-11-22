@@ -32,6 +32,9 @@ public interface InvertibleFunction<T, R> {
      */
 	T unapply(R r);
 	
+	/**
+	 * Constructs an {@link InvertibleFunction} from the given functions.
+	 */
 	static <T, R> InvertibleFunction<T, R> of(Function<T, R> function, Function<? super R, ? extends T> inverse) {
 		return new InvertibleFunction<T, R>() {
 			@Override
@@ -45,6 +48,10 @@ public interface InvertibleFunction<T, R> {
 		};
 	}
 	
+	/**
+	 * Inverts this function. Calling {@link #apply(Object)} on the result is equivalent to
+	 * calling {@link #unapply(Object)} on this function, and vice versa.
+	 */
 	default InvertibleFunction<R, T> inverse() {
 		return of(this::unapply, this::apply);
 	}
@@ -98,10 +105,16 @@ public interface InvertibleFunction<T, R> {
         return of(Function.identity(), Function.identity());
     }
     
+    /**
+     * An {@link InvertibleFunction} representing a downcasting operation.
+     */
     static <T, R extends T> InvertibleFunction<T, R> cast(Class<R> klass) {
         return of(klass::cast, r -> r);
     }
     
+    /**
+     * An {@link InvertibleFunction} representing an unchecked cast.
+     */
     @SuppressWarnings("unchecked")
     static <T, R> InvertibleFunction<T, R> uncheckedCast() {
         return of(t -> (R)t, r -> (T)r);

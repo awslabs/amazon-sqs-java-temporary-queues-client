@@ -6,8 +6,6 @@ import static com.amazonaws.services.sqs.util.SQSQueueUtils.getStringMessageAttr
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.stringMessageAttributeValue;
 import static com.amazonaws.util.StringUtils.UTF8;
 
-import java.io.ObjectStreamException;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +15,6 @@ import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,56 +39,34 @@ import com.amazonaws.util.Md5Utils;
 // TODO-RS: Define separate Message class instead of reusing the SQS SDK's class
 // (which is really a ReceivedMessage model)?
 // TODO-RS: Factor out deduplication implementation?
-@SuppressWarnings("squid:S2055")
-public class SQSExecutorService extends AbstractExecutorService implements Serializable {
+public class SQSExecutorService extends AbstractExecutorService {
 
-	private static final long serialVersionUID = -3415824864452374276L;
-	
 	// TODO-RS: Configuration
 	private static final int MAX_WAIT_TIME_SECONDS = 60;
 	
 	private static final long DEDUPLICATION_WINDOW_MILLIS = TimeUnit.MILLISECONDS.convert(20, TimeUnit.MINUTES);
 	
-	protected static final ThreadLocal<SQSExecutorService> currentDeserializer = new ThreadLocal<>();
-	protected final transient InvertibleFunction<Object, String> serializer;
+	protected final InvertibleFunction<Object, String> serializer;
 	
-	private static final ConcurrentMap<String, SQSExecutorService> executorsByID = new ConcurrentHashMap<>();
-	private final String executorID; 
-    private final Reference reference;	
-	
-    protected final transient AmazonSQS sqs;
-    protected final transient AmazonSQSWithResponses sqsResponseClient;
+    protected final AmazonSQS sqs;
+    protected final AmazonSQSWithResponses sqsResponseClient;
 	protected final String queueUrl;
-	private final transient SQSMessageConsumer messageConsumer;
+	private final SQSMessageConsumer messageConsumer;
 	
-	private final transient ScheduledExecutorService dedupedResultPoller = Executors.newScheduledThreadPool(1);
+	private final ScheduledExecutorService dedupedResultPoller = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 	
 	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl) {
-		this(sqs, queueUrl, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
-	}
-
-	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
-	    this(sqs, queueUrl, executorID, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
+		this(sqs, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
 	}
  
-	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID, InvertibleFunction<Object, String> serializer) {
+	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, InvertibleFunction<Object, String> serializer) {
 		this.sqs = sqs.getAmazonSQS();
 	    this.sqsResponseClient = sqs;
 		this.queueUrl = queueUrl;
 		this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept);
-		this.executorID = executorID;
-		this.reference = new Reference(executorID);
-
-		if (executorID != null) {
-			SQSExecutorService existingExecutor = executorsByID.putIfAbsent(executorID, this);
-			if (existingExecutor != null) {
-				throw new IllegalStateException("An SQSExecutorService has already been created with the ID " + executorID + ": " + existingExecutor);
-			}
-		}
 		this.messageConsumer.start();
-		
 		this.serializer = serializer;
 	}
 
@@ -211,12 +185,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	}
 	
 	protected SQSFutureTask<?> deserializeTask(Message message) {
-		currentDeserializer.set(this);
-		try {
-			return new SQSFutureTask<>(message);
-		} finally {
-			currentDeserializer.set(null);
-		}
+		return new SQSFutureTask<>(message);
 	}
 	
 	public SQSFutureTask<?> convert(Runnable runnable) {
@@ -275,7 +244,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		private final Metadata metadata;
 		
 		private final boolean withResponse;
-		protected final InvertibleFunction<Future<T>, String> futureSerializer = new CompletedFutureToMessageSerializer<>(serializer);
+		protected final InvertibleFunction<Future<T>, String> futureSerializer = new CompletedFutureSerializer<>(serializer);
 	    
 		protected final MessageContent messageContent;
 		
@@ -399,9 +368,6 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	@Override
 	public void shutdown() {
 		shuttingDown.set(true);
-		if (executorID != null) {
-		    executorsByID.remove(reference.executorID);
-		}
 	}
 	
 	@Override
@@ -424,36 +390,5 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	@Override
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
     	return SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, timeout, unit);
-	}
-	
-	private static class Reference implements Serializable {
-		
-		private static final long serialVersionUID = -374968019686668634L;
-		
-		private final String executorID;
-		
-		private Reference(String executorID) {
-			this.executorID = executorID;
-		}
-		
-		private Object readResolve() throws ObjectStreamException {
-			SQSExecutorService executor;
-			if (executorID != null) {
-				executor = executorsByID.get(executorID); 
-				if (executor == null) {
-					throw new IllegalStateException("Could not locate SQSExecutor with ID " + executorID);
-				}
-			} else {
-				executor = currentDeserializer.get();
-				if (executor == null) {
-					throw new IllegalStateException("Not currently in the control flow of SQSExecutor#deserializeTask");
-				}
-			}
-			return executor;
-		}
-	}
-	
-	protected Object writeReplace() throws ObjectStreamException {
-		return reference;
 	}
 }

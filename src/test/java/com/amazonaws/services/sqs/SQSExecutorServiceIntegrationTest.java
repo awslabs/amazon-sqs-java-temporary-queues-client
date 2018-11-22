@@ -1,14 +1,13 @@
 package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.executors.DeduplicatedCallable.deduplicated;
-import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
 import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,7 +16,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -37,9 +37,10 @@ import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
-import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableCallable;
+import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
+import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
@@ -55,11 +56,21 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     private static CountDownLatch tasksCompletedLatch;
     private static List<Throwable> taskExceptions = new ArrayList<>();
     
-    private static class SQSExecutorWithAssertions extends SQSExecutorService {
-    	public SQSExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
-			super(sqs, queueUrl, executorID);
+    private static class SQSExecutorWithAssertions extends SQSExecutorService implements Serializable {
+        
+        ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
+        SerializableReference<SQSExecutorService> thisExecutor;
+        
+    	public SQSExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl) {
+			super(sqs, queueUrl);
+			thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
 		}
 
+    	@Override
+    	protected SQSFutureTask<?> deserializeTask(Message message) {
+    	    return thisExecutor.withScope(localScope, () -> super.deserializeTask(message));
+    	}
+    	
 		@Override
 		protected void afterExecute(Runnable r, Throwable t) {
 			if (t != null) {
@@ -67,6 +78,10 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
 				t.printStackTrace();
 			}
 		}
+		
+		protected Object writeReplace() throws ObjectStreamException {
+	        return thisExecutor;
+	    }
     }
     
     @Before
@@ -103,13 +118,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     }
     
     private SQSExecutorService createExecutor(String queueUrl) {
-    	SQSExecutorService executor = new SQSExecutorWithAssertions(sqsResponseClient, queueUrl, null);
-    	executors.add(executor);
-        return executor;
-    }
-    
-    private SQSScheduledExecutorService createScheduledExecutor(String queueUrl) {
-    	SQSScheduledExecutorService executor = new SQSScheduledExecutorService(sqsResponseClient, queueUrl, null);
+    	SQSExecutorService executor = new SQSExecutorWithAssertions(sqsResponseClient, queueUrl);
     	executors.add(executor);
         return executor;
     }
@@ -212,25 +221,6 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     }
     
     @Test
-    public void singleDelayedTask() throws InterruptedException {
-    	SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-	    executor.delayedExecute(serializable(() -> tasksCompletedLatch.countDown()), 1, TimeUnit.SECONDS);
-	    assertTrue(tasksCompletedLatch.await(5, TimeUnit.SECONDS));
-    }
-    
-    @Test
-    public void taskThatSpawnsTasksMultipleExecutors() throws InterruptedException {
-    	tasksCompletedLatch = new CountDownLatch(20);
-        List<SQSScheduledExecutorService> sweepers = 
-        		IntStream.range(0, 5)
-		        		 .mapToObj(x -> createScheduledExecutor(queueUrl))
-		        		 .collect(Collectors.toList());
-        sweepers.forEach(executor -> 
-        		executor.delayedExecute(deduplicated(() -> seed(executor)), 1, TimeUnit.SECONDS));
-        assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
-    }
-    
-    @Test
     public void parallelStreamTest() {
     	Set<Integer> actual = IntStream.range(0, 10)
 					    	           .parallel()
@@ -300,44 +290,6 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
 			throw new RuntimeException(e);
 		}
     	tasksCompletedLatch.countDown();
-    }
-    
-    @Test
-    public void scheduleAtFixedRate() throws InterruptedException, ExecutionException {
-    	tasksCompletedLatch = new CountDownLatch(3);
-    	SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-    	Future<?> future = executor.scheduleAtFixedRate(serializable(SQSExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
-    	assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
-    	assertFalse(future.isDone());
-    	future.cancel(true);
-    	assertTrue(future.isDone());
-    	assertTrue(future.isCancelled());
-    	// TODO-RS: Switch to JUnit 5
-    	try {
-    		future.get();
-    		fail("Expected CancellationException");
-    	} catch (CancellationException e) {
-    		// Expected
-    	}
-    }
-    
-    @Test
-    public void scheduleWithFixedDelay() throws InterruptedException, ExecutionException {
-    	tasksCompletedLatch = new CountDownLatch(3);
-    	SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-    	Future<?> future = executor.scheduleAtFixedRate(serializable(SQSExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
-    	assertTrue(tasksCompletedLatch.await(10, TimeUnit.SECONDS));
-    	assertFalse(future.isDone());
-    	future.cancel(true);
-        assertTrue(future.isDone());
-        assertTrue(future.isCancelled());
-        // TODO-RS: Switch to JUnit 5
-        try {
-            future.get();
-            fail("Expected CancellationException");
-        } catch (CancellationException e) {
-            // Expected
-        }
     }
     
     @Test

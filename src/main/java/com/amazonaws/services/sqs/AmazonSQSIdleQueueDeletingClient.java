@@ -75,7 +75,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
     }
     
-    static ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
+    private static ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
     		new DaemonThreadFactory("AmazonSQSIdleQueueDeletingClient"));
     
     private final String queueNamePrefix;

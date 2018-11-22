@@ -55,7 +55,9 @@ public class SQSExecutorWithVirtualQueuesTest {
     
     @After
     public void teardown() throws InterruptedException {
-        rpcClient.shutdown();
+        if (rpcClient != null) {
+            rpcClient.shutdown();
+        }
     }
     
     private static void seed(Executor executor) {
@@ -82,7 +84,7 @@ public class SQSExecutorWithVirtualQueuesTest {
     
     @Test
     public void parallelMap() throws InterruptedException, ExecutionException, TimeoutException {
-        SQSExecutorService executor = new SQSExecutorService(rpcClient, requestQueueUrl, null);
+        SQSExecutorService executor = new SQSExecutorService(rpcClient, requestQueueUrl);
     	int sum = IntStream.range(0, 10)
     					   .parallel()
     				       .mapToObj(applyIntOn(executor, i -> i * i))

@@ -27,10 +27,6 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
 		super(sqs, queueUrl);
 	}
 
-	public SQSScheduledExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
-		super(sqs, queueUrl, executorID);
-	}
-
 	/**
 	 * A scheduled version of an SQS task. Strongly modeled after
 	 * {@link ScheduledThreadPoolExecutor#ScheduledFutureTask}.
@@ -177,12 +173,7 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
 	
 	@Override
 	protected SQSFutureTask<?> deserializeTask(Message message) {
-		currentDeserializer.set(this);
-		try {
-			return new ScheduledSQSFutureTask<>(message);
-		} finally {
-			currentDeserializer.set(null);
-		}
+		return new ScheduledSQSFutureTask<>(message);
 	}
 	
 	public void delayedExecute(Runnable runnable, long delay, TimeUnit unit) {

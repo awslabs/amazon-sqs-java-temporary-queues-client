@@ -5,7 +5,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-public class CompletedFutureToMessageSerializer<T> implements InvertibleFunction<Future<T>, String> {
+public class CompletedFutureSerializer<T> implements InvertibleFunction<Future<T>, String> {
 
     private static final char NORMAL_VALUE_PREFIX = '.';
     private static final char CANCELLED_PREFIX = 'C';
@@ -14,12 +14,12 @@ public class CompletedFutureToMessageSerializer<T> implements InvertibleFunction
     private final InvertibleFunction<T, String> resultSerializer;
     private final InvertibleFunction<Throwable, String> exceptionSerializer;
     
-    public CompletedFutureToMessageSerializer(InvertibleFunction<Object, String> serializer) {
+    public CompletedFutureSerializer(InvertibleFunction<Object, String> serializer) {
         this(serializer.compose(InvertibleFunction.uncheckedCast()),
              serializer.compose(InvertibleFunction.uncheckedCast()));
     }
     
-    public CompletedFutureToMessageSerializer(InvertibleFunction<T, String> resultSerializer,
+    public CompletedFutureSerializer(InvertibleFunction<T, String> resultSerializer,
                                               InvertibleFunction<Throwable, String> exceptionSerializer) {
         this.resultSerializer = resultSerializer;
         this.exceptionSerializer = exceptionSerializer;

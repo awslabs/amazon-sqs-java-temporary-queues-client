@@ -4,24 +4,34 @@ import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplic
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.SQS_LIST_QUEUES_LIMIT;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
 
+import java.io.ObjectStreamException;
+import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
+import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-class IdleQueueSweeper extends SQSScheduledExecutorService {
+@SuppressWarnings("squid:S2055")
+class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializable {
 	
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
 
+    private final SerializableReference<IdleQueueSweeper> thisReference;
+    
     public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
-		super(sqs, queueUrl, null);
+		super(sqs, queueUrl);
+		// TODO-RS: Need to build a full queue URL prefix for this, to include
+		// the account too.
+		thisReference = new SerializableReference<>(queueNamePrefix, this);
 		
 		// Jitter the startup times to avoid throttling on tagging as much as possible.
 		long initialDelay = ThreadLocalRandom.current().nextLong(period);
@@ -34,7 +44,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService {
 
 	protected void checkQueuesForIdleness(String prefix) {
 		try {
-			forEachQueue(AmazonSQSIdleQueueDeletingClient.executor, sqs, prefix, SQS_LIST_QUEUES_LIMIT, this::checkQueueForIdleness);
+			forEachQueue(this, sqs, prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
 		} catch (Exception e) {
 			// Make sure the recurring task never throws so it doesn't terminate.
 			LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
@@ -60,5 +70,15 @@ class IdleQueueSweeper extends SQSScheduledExecutorService {
         return idleQueueRetentionPeriod != null && 
         	   (lastHeartbeat == null || 
         		(currentTimestamp - lastHeartbeat) > idleQueueRetentionPeriod * 1000);
+    }
+    
+    protected Object writeReplace() throws ObjectStreamException {
+        return thisReference;
+    }
+    
+    @Override
+    public void shutdown() {
+        thisReference.close();
+        super.shutdown();
     }
 }
