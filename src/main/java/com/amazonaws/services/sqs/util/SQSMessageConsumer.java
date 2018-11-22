@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.util;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;

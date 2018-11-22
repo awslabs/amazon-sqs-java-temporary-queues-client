@@ -26,6 +26,10 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
+import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // TODO-RS: More careful/efficient concurrency!
 // TODO-RS: Respect IdleQueueRetentionPeriodSeconds as well.
@@ -38,58 +42,6 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     	// TODO-RS: logging!
     	System.out.println("[WARNING] Orphaned message sent to " + queueName);
     };
-    
-    private class HostQueue {
-        
-        private final String queueUrl;
-        private final ReceiveQueueBuffer buffer;
-        private final SQSMessageConsumer consumer;
-        
-        // TODO-RS: Background tasks to delete virtual queues according to IdleQueueRetentionPeriodSeconds.
-        // May want to use a LinkedHashMap with the accessOrder option to simplify
-        // expiring queues with the same retention period (which will be the norm).
-        // Should agree with the service team on the queue attribute name/semantics so it can later
-        // be supported server-side as well.
-        private final ConcurrentMap<String, ReceiveQueueBuffer> virtualQueues = new ConcurrentHashMap<>();
-        
-        public HostQueue(String queueUrl) {
-            this.queueUrl = queueUrl;
-            // Used to avoid 
-            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
-            this.consumer = new SQSMessageConsumer(AmazonSQSVirtualQueuesClient.this, queueUrl, this::dispatchMessage);
-            this.consumer.start();
-        }
-        
-        public String createVirtualQueue(String queueName) {
-            virtualQueues.put(queueName, new ReceiveQueueBuffer(buffer));
-            return new VirtualQueueID(queueUrl, queueName).getQueueUrl();
-        }
-        
-        public ReceiveQueueBuffer getVirtualQueue(String queueName) {
-            return virtualQueues.get(queueName);
-        }
-        
-        public void deleteVirtualQueue(String queueName) {
-            ReceiveQueueBuffer virtualQueue = virtualQueues.remove(queueName);
-            if (virtualQueue != null) {
-                virtualQueue.shutdown();
-            }
-        }
-        
-        private void dispatchMessage(Message message) {
-            String queueName = message.getMessageAttributes().get(VIRTUAL_QUEUE_NAME_ATTRIBUTE).getStringValue();
-            ReceiveQueueBuffer virtualQueue = virtualQueues.get(queueName);
-            if (virtualQueue != null) {
-                virtualQueue.deliverMessages(Collections.singletonList(message), queueUrl, null);
-            } else {
-                orphanedMessageHandler.accept(queueName, message);
-            }
-        }
-        
-        public void shutdown() {
-            this.consumer.shutdown();
-        }
-    }
     
     private final ConcurrentMap<String, HostQueue> hostQueues = new ConcurrentHashMap<>();
     
@@ -204,5 +156,89 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     public void shutdown() {
         hostQueues.values().forEach(HostQueue::shutdown);
         amazonSqsToBeExtended.shutdown();
+    }
+    
+    private class HostQueue {
+        
+        private final String queueUrl;
+        private final ReceiveQueueBuffer buffer;
+        private final SQSMessageConsumer consumer;
+        
+        // TODO-RS: Background tasks to delete virtual queues according to IdleQueueRetentionPeriodSeconds.
+        // May want to use a LinkedHashMap with the accessOrder option to simplify
+        // expiring queues with the same retention period (which will be the norm).
+        // Should agree with the service team on the queue attribute name/semantics so it can later
+        // be supported server-side as well.
+        private final ConcurrentMap<String, ReceiveQueueBuffer> virtualQueues = new ConcurrentHashMap<>();
+        
+        public HostQueue(String queueUrl) {
+            this.queueUrl = queueUrl;
+            // Used to avoid 
+            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
+            this.consumer = new SQSMessageConsumer(AmazonSQSVirtualQueuesClient.this, queueUrl, this::dispatchMessage);
+            this.consumer.start();
+        }
+        
+        public String createVirtualQueue(String queueName) {
+            virtualQueues.put(queueName, new ReceiveQueueBuffer(buffer));
+            return new VirtualQueueID(queueUrl, queueName).getQueueUrl();
+        }
+        
+        public ReceiveQueueBuffer getVirtualQueue(String queueName) {
+            return virtualQueues.get(queueName);
+        }
+        
+        public void deleteVirtualQueue(String queueName) {
+            ReceiveQueueBuffer virtualQueue = virtualQueues.remove(queueName);
+            if (virtualQueue != null) {
+                virtualQueue.shutdown();
+            }
+        }
+        
+        private void dispatchMessage(Message message) {
+            String queueName = message.getMessageAttributes().get(VIRTUAL_QUEUE_NAME_ATTRIBUTE).getStringValue();
+            ReceiveQueueBuffer virtualQueue = virtualQueues.get(queueName);
+            if (virtualQueue != null) {
+                virtualQueue.deliverMessages(Collections.singletonList(message), queueUrl, null);
+            } else {
+                orphanedMessageHandler.accept(queueName, message);
+            }
+        }
+        
+        public void shutdown() {
+            this.consumer.shutdown();
+        }
+    }
+    
+    private static class VirtualQueueID {
+
+        private final String hostQueueUrl;
+        private final String virtualQueueName;
+       
+        public static VirtualQueueID fromQueueUrl(String queueUrl) {
+            int index = queueUrl.indexOf('#');
+            if (index >= 0) {
+                return new VirtualQueueID(queueUrl.substring(0, index), queueUrl.substring(index + 1));
+            } else {
+                return null;
+            }
+        }
+        
+        public VirtualQueueID(String hostQueueUrl, String virtualQueueName) {
+            this.hostQueueUrl = hostQueueUrl;
+            this.virtualQueueName = virtualQueueName;
+        }
+        
+        public String getHostQueueUrl() {
+            return hostQueueUrl;
+        }
+        
+        public String getVirtualQueueName() {
+            return virtualQueueName;
+        }
+        
+        public String getQueueUrl() {
+            return hostQueueUrl + '#' + virtualQueueName;
+        }
     }
 }

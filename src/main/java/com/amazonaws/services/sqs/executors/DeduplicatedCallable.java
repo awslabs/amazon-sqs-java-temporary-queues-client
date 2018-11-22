@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
 public class DeduplicatedCallable<V> implements SerializableCallable<V>, Deduplicated {
 

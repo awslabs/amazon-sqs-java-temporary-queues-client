@@ -1,8 +1,8 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.util;
 
-import static com.amazonaws.services.sqs.ExecutorUtils.acceptIntOn;
-import static com.amazonaws.services.sqs.ExecutorUtils.acceptOn;
-import static com.amazonaws.services.sqs.ExecutorUtils.applyIntOn;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptIntOn;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptOn;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
 
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +16,7 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesResult;

@@ -1,7 +1,9 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.util;
 
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ResponseMetadata;
+import com.amazonaws.services.sqs.AbstractAmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.AddPermissionRequest;
 import com.amazonaws.services.sqs.model.AddPermissionResult;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;

@@ -1,6 +1,5 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
-import java.io.Serializable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -11,7 +10,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
 
 public class ExecutorUtils {
     
@@ -39,10 +37,7 @@ public class ExecutorUtils {
 		}
     }
     
-	public static interface SerializableSupplier<V> extends Serializable, Supplier<V> {
-    }
-    
-    public static <T> T getOn(ExecutorService executor, SerializableSupplier<T> supplier) {
+	public static <T> T getOn(ExecutorService executor, SerializableSupplier<T> supplier) {
     	Future<T> future = executor.submit(SerializableCallable.serializable(supplier::get));
     	for (;;) {
 	    	try {

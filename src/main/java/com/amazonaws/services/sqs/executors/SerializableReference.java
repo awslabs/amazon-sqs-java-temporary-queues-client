@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
 import java.io.ObjectStreamException;
 import java.io.Serializable;

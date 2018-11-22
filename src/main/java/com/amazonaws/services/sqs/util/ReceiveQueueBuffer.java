@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.util;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,6 +39,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
 import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
@@ -50,15 +51,15 @@ import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 /**
  * The ReceiveQueueBuffer class is responsible for dequeueing of messages from a single SQS queue.
  * <p>
- * Synchronization strategy: - Threads must hold the TaskSpawnSyncPoint object monitor to spawn a
- * new task or modify the number of inflight tasks - Threads must hold the monitor of the "futures"
- * list to modify the list - Threads must hold the monitor of the "finishedTasks" list to modify the
- * list - If you need to lock both futures and finishedTasks, lock futures first and finishedTasks
- * second
+ * Synchronization strategy: 
+ * - Threads must hold the TaskSpawnSyncPoint object monitor to spawn a new task or modify the number of inflight tasks 
+ * - Threads must hold the monitor of the "futures" list to modify the list 
+ * - Threads must hold the monitor of the "finishedTasks" list to modify the list 
+ * - If you need to lock both futures and finishedTasks, lock futures first and finishedTasks second
  */
 public class ReceiveQueueBuffer {
 
-    private static final Log log = LogFactory.getLog(ReceiveQueueBuffer.class);
+    private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
 
     private static final Queue<Message> EMPTY_DEQUE = new ArrayDeque<Message>();
     
@@ -125,7 +126,7 @@ public class ReceiveQueueBuffer {
      * 
      * @return never null
      */
-    public ReceiveMessageFuture receiveMessageAsync(ReceiveMessageRequest rq) {
+    public Future<ReceiveMessageResult> receiveMessageAsync(ReceiveMessageRequest rq) {
         if (shutDown) {
             throw new AmazonClientException("The buffer has been shut down.");
         }
@@ -349,7 +350,7 @@ public class ReceiveQueueBuffer {
         
         ReceiveMessageFuture(int paramSize, Long waitTimeNanos) {
             requestedSize = paramSize;
-            messages = new ArrayList<Message>(requestedSize);
+            messages = new ArrayList<>(requestedSize);
             
             if (waitTimeNanos != null) {
                 this.waitTimeDeadlineNano = System.nanoTime() + waitTimeNanos;
@@ -541,7 +542,7 @@ public class ReceiveQueueBuffer {
                 sqsClient.changeMessageVisibilityBatch(batchRequest);
             } catch (AmazonClientException e) {
                 // Log and ignore.
-                log.warn("ReceiveMessageBatchTask: changeMessageVisibility failed " + e);
+                LOG.warn("ReceiveMessageBatchTask: changeMessageVisibility failed " + e);
             }
         }
         

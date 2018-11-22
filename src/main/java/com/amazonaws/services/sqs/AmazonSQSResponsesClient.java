@@ -18,6 +18,8 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.responsesapi.MessageContent;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // TODO-RS: Configuration of queue attributes to use, or at least a policy
 public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {

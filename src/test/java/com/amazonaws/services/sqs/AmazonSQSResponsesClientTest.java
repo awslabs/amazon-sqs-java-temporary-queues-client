@@ -14,8 +14,9 @@ import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.responsesapi.MessageContent;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 
-public class AmazonSQSResponsesClientTest {
+public class AmazonSQSResponsesClientTest extends TestUtils {
 	private static AmazonSQS sqs;
     private static AmazonSQSWithResponses rpcClient;
     

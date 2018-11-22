@@ -1,9 +1,9 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.DeduplicatedCallable.deduplicated;
-import static com.amazonaws.services.sqs.DeduplicatedRunnable.deduplicated;
-import static com.amazonaws.services.sqs.ExecutorUtils.applyIntOn;
-import static com.amazonaws.services.sqs.SerializableRunnable.serializable;
+import static com.amazonaws.services.sqs.executors.DeduplicatedCallable.deduplicated;
+import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
+import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -37,10 +37,15 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.executors.SQSExecutorService;
+import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
+import com.amazonaws.services.sqs.executors.SerializableCallable;
+import com.amazonaws.services.sqs.executors.SerializableRunnable;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-public class SQSExecutorServiceIntegrationTest {
+public class SQSExecutorServiceIntegrationTest extends TestUtils {
     
     private static AmazonSQS sqs;
     private static AmazonSQSWithResponses sqsResponseClient;
@@ -75,7 +80,7 @@ public class SQSExecutorServiceIntegrationTest {
 //                .withCredentials(credentialsProvider)
                 .build();
         sqsResponseClient = new AmazonSQSResponsesClient(sqs);
-        queueUrl = sqs.createQueue(TestUtils.generateRandomQueueName()).getQueueUrl();
+        queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
         taskExceptions.clear();

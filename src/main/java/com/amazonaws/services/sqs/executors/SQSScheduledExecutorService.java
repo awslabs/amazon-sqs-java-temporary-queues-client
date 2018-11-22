@@ -1,7 +1,7 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
-import static com.amazonaws.services.sqs.SQSQueueUtils.getLongMessageAttributeValue;
-import static com.amazonaws.services.sqs.SQSQueueUtils.longMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.getLongMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.longMessageAttributeValue;
 import static java.util.concurrent.Executors.callable;
 
 import java.util.concurrent.Callable;

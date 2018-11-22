@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentMap;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.CreateQueueResult;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
+import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
  * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.

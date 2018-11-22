@@ -1,7 +1,7 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.DeduplicatedRunnable.deduplicated;
-import static com.amazonaws.services.sqs.SQSQueueUtils.forEachQueue;
+import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -16,7 +16,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.sqs.ReceiveQueueBuffer.ReceiveMessageFuture;
+import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
@@ -45,6 +45,10 @@ import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.DaemonThreadFactory;
+import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // Also check if a queue was CHECKED for idleness recently.
 class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
@@ -312,7 +316,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     		buffer.submit(executor, () -> receiveIgnoringNonExistantQueue(alternateRequest),
     				      queueUrl, request.getVisibilityTimeout());
     		try {
-				ReceiveMessageFuture receiveFuture = buffer.receiveMessageAsync(request);
+    		    Future<ReceiveMessageResult> receiveFuture = buffer.receiveMessageAsync(request);
 				return receiveFuture.get(request.getWaitTimeSeconds(), TimeUnit.SECONDS);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();

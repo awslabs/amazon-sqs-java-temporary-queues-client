@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs.proxy;
+package com.amazonaws.services.sqs.executors;
 
 import java.util.Objects;
 import java.util.function.Function;

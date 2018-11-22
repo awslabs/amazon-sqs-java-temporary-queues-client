@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
 public class DeduplicatedRunnable implements SerializableRunnable, Deduplicated {
 

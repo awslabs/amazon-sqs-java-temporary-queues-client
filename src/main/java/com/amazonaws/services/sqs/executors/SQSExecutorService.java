@@ -1,9 +1,9 @@
-package com.amazonaws.services.sqs;
+package com.amazonaws.services.sqs.executors;
 
-import static com.amazonaws.services.sqs.SQSQueueUtils.booleanMessageAttributeValue;
-import static com.amazonaws.services.sqs.SQSQueueUtils.getBooleanMessageAttributeValue;
-import static com.amazonaws.services.sqs.SQSQueueUtils.getStringMessageAttributeValue;
-import static com.amazonaws.services.sqs.SQSQueueUtils.stringMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.booleanMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.getBooleanMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.getStringMessageAttributeValue;
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.stringMessageAttributeValue;
 import static com.amazonaws.util.StringUtils.UTF8;
 
 import java.io.ObjectStreamException;
@@ -30,15 +30,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.proxy.Base64Serializer;
-import com.amazonaws.services.sqs.proxy.CompletedFutureToMessageSerializer;
-import com.amazonaws.services.sqs.proxy.DefaultSerializer;
-import com.amazonaws.services.sqs.proxy.InvertibleFunction;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.responsesapi.MessageContent;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.util.BinaryUtils;
 import com.amazonaws.util.Md5Utils;
 

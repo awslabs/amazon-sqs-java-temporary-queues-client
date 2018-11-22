@@ -1,6 +1,6 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.ExecutorUtils.applyIntOn;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
 import static org.junit.Assert.assertEquals;
 
 import java.io.Serializable;
@@ -19,6 +19,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.executors.SQSExecutorService;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 
 public class SQSExecutorWithVirtualQueuesTest {

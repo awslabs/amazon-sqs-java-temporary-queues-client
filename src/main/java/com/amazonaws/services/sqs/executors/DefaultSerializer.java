@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs.proxy;
+package com.amazonaws.services.sqs.executors;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
