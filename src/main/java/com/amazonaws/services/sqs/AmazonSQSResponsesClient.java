@@ -140,23 +140,6 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
 	    return requestMessage.getMessageAttributes().containsKey(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
 	}
 	
-	public Message receiveResponse(String responseQueueUrl, int waitTimeSeconds) throws TimeoutException {
-        try {
-            ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-                    .withQueueUrl(responseQueueUrl)
-                    .withMaxNumberOfMessages(1)
-                    .withWaitTimeSeconds(waitTimeSeconds);
-            List<Message> messages = sqs.receiveMessage(receiveRequest).getMessages();
-            if (messages.isEmpty()) {
-                throw new TimeoutException();
-            } else {
-                return messages.get(0);
-            }
-        } finally {
-            sqs.deleteQueue(responseQueueUrl);
-        }
-    }
-	
 	@Override
 	public void shutdown() {
 	    sqs.shutdown();
