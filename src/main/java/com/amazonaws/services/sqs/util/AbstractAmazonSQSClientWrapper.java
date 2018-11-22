@@ -169,6 +169,7 @@ public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
     }
     
     @Override
+    @Deprecated
     public void setEndpoint(String endpoint) {
         amazonSqsToBeExtended.setEndpoint(endpoint);
     }

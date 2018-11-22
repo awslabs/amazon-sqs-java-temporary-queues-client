@@ -37,6 +37,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sqs.AmazonSQSResponsesClient;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableCallable;
@@ -44,6 +47,7 @@ import com.amazonaws.services.sqs.executors.SerializableRunnable;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import com.amazonaws.services.sqs.util.TestUtils;
 
 public class SQSExecutorServiceIntegrationTest extends TestUtils {
     
@@ -298,19 +302,13 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         assertEquals(Integer.valueOf(4), future.get(2, TimeUnit.SECONDS));
     }
     
-    private static void log(String message) {
-    	System.out.println(new DateTime() + ": " + message);
-    }
-    
     private static void slowTask() {
-    	log("Starting slowTask");
     	try {
 			Thread.sleep(2000);
 		} catch (InterruptedException e) {
 			throw new RuntimeException(e);
 		}
     	tasksCompletedLatch.countDown();
-    	log("Done slowTask");
     }
     
     @Test

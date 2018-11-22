@@ -9,6 +9,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
@@ -18,12 +21,15 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.responsesapi.MessageContent;
+import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // TODO-RS: Configuration of queue attributes to use, or at least a policy
 public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
     
+    private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
+
     public static final String RESPONSE_QUEUE_URL_ATTRIBUTE_NAME = "ResponseQueueUrl";
     
     private final AmazonSQS sqs;
@@ -64,7 +70,7 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
         // TODO-RS: complete the future exceptionally, for the right set of exceptions
         SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, responseQueueUrl,
                 future::complete, () -> future.completeExceptionally(new TimeoutException()));
-        consumer.start(timeout, unit);
+        consumer.runFor(timeout, unit);
         future.whenComplete((message, exception) -> {
             consumer.shutdown();
             sqs.deleteQueue(responseQueueUrl);
@@ -121,11 +127,12 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
                 sqs.sendMessage(responseRequest);
             } catch (QueueDoesNotExistException e) {
                 // Stale request, ignore
-                System.out.println("Ignoring request with deleted reply queue: " + replyQueueUrl);
+                // TODO-RS: CW metric
+                LOG.warn("Ignoring response to deleted response queue: " + replyQueueUrl);
             }
 	    } else {
-	        // TODO-RS: CW metric and log
-            System.out.println("warning: tried to send response when none was requested");
+	        // TODO-RS: CW metric
+	        LOG.warn("Attempted to send response when none was requested");
 	    }
 	}
 	

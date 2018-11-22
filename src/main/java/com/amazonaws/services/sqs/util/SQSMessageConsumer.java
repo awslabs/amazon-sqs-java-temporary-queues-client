@@ -1,5 +1,7 @@
 package com.amazonaws.services.sqs.util;
 
+import static com.amazonaws.services.sqs.util.SQSQueueUtils.ATTRIBUTE_NAMES_ALL;
+
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -7,24 +9,40 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 
-// TODO: AmazonSQSAsync support, in place of our own ExecutorService
+/**
+ * A very basic utility class for continuously polling for messages from an
+ * Amazon SQS queue. It uses a single thread to receive up to 10 messages at once
+ * and dispatch in parallel to a given {@code Consumer<Message>} callback.
+ * <p>
+ * This class will be augmented in the future to support a great deal more
+ * configuration and sophistication around scaling up and down to meet
+ * demand from the queue.
+ */
 public class SQSMessageConsumer {
 	
-	// TODO: Logging!
-	
+    private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
+
 	protected final AmazonSQS sqs;
 	protected final String queueUrl;
 	protected final Consumer<Message> consumer;
+	
 	protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+	protected final Runnable shutdownHook;
+    // TODO-RS: This is currently only defining a soft deadline for shutdown:
+	// it only limits the WaitTimeSeconds parameter, but will still wait for
+	// delayed completion of inflight receives.
 	protected long deadlineNanos = -1;
 	
+	// TODO: AmazonSQSAsync support, in place of our own ExecutorService
 	protected final ExecutorService executor;
-	protected final Runnable shutdownHook;
 	
 	public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
 	    this(sqs, queueUrl, consumer, () -> {});
@@ -42,7 +60,7 @@ public class SQSMessageConsumer {
 		executor.execute(this::poll);
 	}
 	
-	public void start(long timeout, TimeUnit unit) {
+	public void runFor(long timeout, TimeUnit unit) {
 	    deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
         start();
     }
@@ -64,13 +82,14 @@ public class SQSMessageConsumer {
                     waitTimeSeconds = Math.max(0, Math.min(20, secondsRemaining));
                 }
             }
-			try {
+
+            try {
 				ReceiveMessageRequest request = new ReceiveMessageRequest()
 						.withQueueUrl(queueUrl)
 						.withWaitTimeSeconds(waitTimeSeconds)
 						.withMaxNumberOfMessages(10)
-						.withMessageAttributeNames("All")
-						.withAttributeNames("All");
+						.withMessageAttributeNames(ATTRIBUTE_NAMES_ALL)
+						.withAttributeNames(ATTRIBUTE_NAMES_ALL);
 				List<Message> messages = sqs.receiveMessage(request).getMessages();
 
 				messages.parallelStream().forEach(this::accept);
@@ -88,11 +107,10 @@ public class SQSMessageConsumer {
 				if ("Connection pool shut down".equals(e.getMessage())) {
 					break;
 				} else {
-					e.printStackTrace();
+				    LOG.error("Unexpected exception", e);
 				}
 			} catch (Exception e) {
-			    // TODO-RS: Remove
-				e.printStackTrace();
+			    LOG.error("Unexpected exception", e);
 			}
 		}
 	}
@@ -108,8 +126,7 @@ public class SQSMessageConsumer {
 		} catch (QueueDoesNotExistException e) {
 			// Ignore
 		} catch (RuntimeException e) {
-		    // TODO-RS: Logging
-			e.printStackTrace();
+		    LOG.error("Exception encounted while processing message with ID " + message.getMessageId(), e);
 			sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
 		}
 	}

@@ -2,7 +2,6 @@ package com.amazonaws.services.sqs;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -10,6 +9,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.CreateQueueResult;
@@ -35,12 +37,14 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 // TODO-RS: Respect IdleQueueRetentionPeriodSeconds as well.
 class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     
+    private static final Log LOG = LogFactory.getLog(AmazonSQSVirtualQueuesClient.class);
+
     public static final String VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE = "HostQueueUrl";
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
     
     private static final BiConsumer<String, Message> DEFAULT_ORPHANED_MESSAGE_HANDLER = (queueName, message) -> {
     	// TODO-RS: logging!
-    	System.out.println("[WARNING] Orphaned message sent to " + queueName);
+    	LOG.warn("Orphaned message sent to " + queueName + ": " + message.getMessageId());
     };
     
     private final ConcurrentMap<String, HostQueue> hostQueues = new ConcurrentHashMap<>();

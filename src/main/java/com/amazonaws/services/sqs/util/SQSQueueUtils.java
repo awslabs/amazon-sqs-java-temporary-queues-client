@@ -23,17 +23,18 @@ import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.fasterxml.jackson.annotation.JsonFormat.Value;
 
 public class SQSQueueUtils {
 
-    private SQSQueueUtils() {
-        // Never instantiated
-    }
+    public static final String ATTRIBUTE_NAMES_ALL = "All";
     
     public static final String MESSAGE_ATTRIBUTE_TYPE_STRING = "String";
     public static final String MESSAGE_ATTRIBUTE_TYPE_BOOLEAN = "String.boolean";
     public static final String MESSAGE_ATTRIBUTE_TYPE_LONG = "Number.long";
+    
+    private SQSQueueUtils() {
+        // Never instantiated
+    }
     
     public static MessageAttributeValue stringMessageAttributeValue(String value) {
         return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_STRING)

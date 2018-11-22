@@ -16,6 +16,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
@@ -53,7 +56,9 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 // Also check if a queue was CHECKED for idleness recently.
 class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
-	// Publicly visible constants
+    private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
+
+    // Publicly visible constants
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
     
     // TODO-RS: Configuration
@@ -79,7 +84,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 			} catch (Exception e) {
 				// Make sure the recurring task doesn't throw so it doesn't terminate.
 			    // TODO-RS: Logging
-				e.printStackTrace();
+				LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
 			}
         }
         
@@ -340,10 +345,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     private List<Message> receiveIgnoringNonExistantQueue(ReceiveMessageRequest request) {
 		try {
 			List<Message> messages = amazonSqsToBeExtended.receiveMessage(request).getMessages();
-			System.out.println("(* Received " + messages.size() + " messages from " + request.getQueueUrl());
 			return messages;
 		} catch (QueueDoesNotExistException e) {
-			System.out.println("(* " + request.getQueueUrl() + " doesn't exist");
 			return Collections.emptyList();
 		}
     }

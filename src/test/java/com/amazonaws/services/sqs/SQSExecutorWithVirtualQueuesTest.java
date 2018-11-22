@@ -19,6 +19,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sqs.AmazonSQSResponsesClient;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
 import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 

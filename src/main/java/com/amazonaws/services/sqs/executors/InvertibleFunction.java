@@ -2,7 +2,6 @@ package com.amazonaws.services.sqs.executors;
 
 import java.util.Objects;
 import java.util.function.Function;
-import java.util.stream.Stream;
 
 /**
  * Represents a reversible function that accepts one argument and produces a result.
