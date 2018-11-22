@@ -31,11 +31,6 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 		super(sqs, queueUrl);
 		// TODO-RS: Need to build a full queue URL prefix for this, to include
 		// the account too.
-		System.out.println("CREATED FROM:");
-		RuntimeException e = new RuntimeException();
-		e.fillInStackTrace();
-		e.printStackTrace();
-		
 		thisReference = new SerializableReference<>(queueNamePrefix, this);
 		
 		// Jitter the startup times to avoid throttling on tagging as much as possible.
