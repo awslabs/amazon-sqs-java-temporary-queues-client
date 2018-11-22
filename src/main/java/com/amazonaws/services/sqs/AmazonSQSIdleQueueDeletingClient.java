@@ -1,8 +1,5 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
-import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,7 +16,6 @@ import java.util.concurrent.TimeoutException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
@@ -51,64 +47,19 @@ import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
-import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-// Also check if a queue was CHECKED for idleness recently.
 class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
-    private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
+    private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
 
-    // Publicly visible constants
+    // Publicly visible constant
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
     
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
+    private static final long IDLE_QUEUE_SWEEPER_PASS_SECONDS = 10;
 
-    // Internal constants
-    private static final String LAST_HEARTBEAT_TIMESTAMP = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
-    
-    private static class IdleQueueSweeper extends SQSScheduledExecutorService {
-    	
-    	private static final int SQS_LIST_QUEUES_LIMIT = 1000;
-    	
-        public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix) {
-			super(sqs, queueUrl, null);
-			// TODO-RS: Configuration
-	        repeatAtFixedRate(deduplicated(() -> checkQueuesForIdleness(queueNamePrefix)), 
-	        		10, 10, TimeUnit.SECONDS);
-		}
-
-		protected void checkQueuesForIdleness(String prefix) {
-			try {
-				forEachQueue(executor, sqs, prefix, SQS_LIST_QUEUES_LIMIT, this::checkQueueForIdleness);
-			} catch (Exception e) {
-				// Make sure the recurring task doesn't throw so it doesn't terminate.
-			    // TODO-RS: Logging
-				LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
-			}
-        }
-        
-        protected void checkQueueForIdleness(String queueUrl) {
-            try {
-                if (isQueueIdle(queueUrl) && SQSQueueUtils.isQueueEmpty(sqs, queueUrl)) {
-                    sqs.deleteQueue(queueUrl);
-                }
-            } catch (QueueDoesNotExistException e) {
-                // Queue already deleted so nothing to do.
-            }
-        }
-        
-        private boolean isQueueIdle(String queueUrl) {
-            Map<String, String> queueTags = sqs.listQueueTags(queueUrl).getTags();
-            Long lastHeartbeat = getLongTag(queueTags, LAST_HEARTBEAT_TIMESTAMP);
-            Long idleQueueRetentionPeriod = getLongTag(queueTags, IDLE_QUEUE_RETENTION_PERIOD);
-            long currentTimestamp = System.currentTimeMillis();
-
-            return idleQueueRetentionPeriod != null && 
-            	   (lastHeartbeat == null || 
-            		(currentTimestamp - lastHeartbeat) > idleQueueRetentionPeriod * 1000);
-        }
-    }
+    static final String LAST_HEARTBEAT_TIMESTAMP = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
     
     private class QueueMetadata {
         private final String name;
@@ -133,18 +84,14 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     
     private final IdleQueueSweeper idleQueueSweeper;
     
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQSWithResponses sqs, String queueNamePrefix) {
-    	this(sqs, queueNamePrefix, null);
-    }
-    
     public AmazonSQSIdleQueueDeletingClient(AmazonSQSWithResponses sqs, String queueNamePrefix, String rootQueueUrl) {
         super(sqs.getAmazonSQS());
-        this.queueNamePrefix = queueNamePrefix;
-        if (rootQueueUrl != null) {
-        	this.idleQueueSweeper = new IdleQueueSweeper(sqs, rootQueueUrl, queueNamePrefix);
-        } else {
-        	this.idleQueueSweeper = null;
+        if (queueNamePrefix.isEmpty()) {
+            throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
+        this.queueNamePrefix = queueNamePrefix;
+    	this.idleQueueSweeper = new IdleQueueSweeper(sqs, rootQueueUrl, queueNamePrefix,
+    	                                             IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
     }
     
     @Override
@@ -248,32 +195,38 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
     }
     
-    private static Long getLongTag(Map<String, String> queueTags, String key) {
+    static Long getLongTag(Map<String, String> queueTags, String key) {
         String tag = queueTags.get(key);
         return tag == null ? null : Long.parseLong(tag);
     }
     
     private String recreateQueue(String queueUrl) {
-        // TODO-RS: metrics
+        // TODO-RS: CW metrics
         QueueMetadata queue = queues.get(queueUrl);
         if (queue != null) {
+            LOG.warn("Queue " + queueUrl + " was deleted while it was still in use! Attempting to recreate...");
 	        try {
 		        createQueue(new CreateQueueRequest().withQueueName(queue.name)
 		                                            .withAttributes(queue.attributes));
+		        LOG.warn("Queue " + queueUrl + " successfully recreated.");
 		        return queueUrl;
 	        } catch (QueueDeletedRecentlyException e) {
 	        	// Ignore, will retry later
+	            LOG.warn("Queue " + queueUrl + " was recently deleted, cannot create it yet.");
 	        }
         }
         
     	String alternateQueueUrl = alternateQueueName(queueUrl);
     	QueueMetadata metadata = queues.get(alternateQueueUrl);
     	if (metadata == null && queue != null) {
+    	    LOG.warn("Attempting to create failover queue: " + alternateQueueUrl);
     		try {
 	    		createQueue(new CreateQueueRequest().withQueueName(alternateQueueName(queue.name))
 	                    							.withAttributes(queue.attributes));
+	    		LOG.warn("Failover queue " + alternateQueueUrl + " successfully recreated.");
     		} catch (QueueDeletedRecentlyException e) {
 	        	// Ignore, will retry later
+    		    LOG.warn("Failover queue " + alternateQueueUrl + " was recently deleted, cannot create it yet.");
 	        }	
     	}
     	return alternateQueueUrl;
@@ -309,7 +262,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
     	// Here we have to also fetch from the backup queue if we created it
     	// TODO-RS: Need to decide to stop fetching from the backup queue at some point too!
-        // TODO-RS: What about FIFO? Make sure the buffer handles semantics correctly!
     	String queueUrl = request.getQueueUrl();
 		String alternateQueueUrl = alternateQueueName(queueUrl);
     	QueueMetadata alternateMetadata = queues.get(alternateQueueUrl);
@@ -365,7 +317,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     
     @Override
     public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(ChangeMessageVisibilityBatchRequest request) {
-    	// TODO-RS: The receipt handle might be for the failover queue
         // If the queue is deleted, there's no way to change the message visibility.
     	try {
     		return super.changeMessageVisibilityBatch(request);

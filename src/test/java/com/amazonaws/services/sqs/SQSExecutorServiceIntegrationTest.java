@@ -31,15 +31,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.joda.time.DateTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.AmazonSQSResponsesClient;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableCallable;
@@ -75,13 +71,8 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     
     @Before
     public void setup() {
-
-//        final AWSCredentialsProvider credentialsProvider = new OdinAWSCredentialsProvider(
-//            TestUtils.getOdinMaterialSet());
-        
         sqs = AmazonSQSClientBuilder.standard()
                 .withRegion(Regions.US_WEST_2)
-//                .withCredentials(credentialsProvider)
                 .build();
         sqsResponseClient = new AmazonSQSResponsesClient(sqs);
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();

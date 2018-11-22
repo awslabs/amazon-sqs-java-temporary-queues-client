@@ -32,6 +32,8 @@ public class SQSQueueUtils {
     public static final String MESSAGE_ATTRIBUTE_TYPE_BOOLEAN = "String.boolean";
     public static final String MESSAGE_ATTRIBUTE_TYPE_LONG = "Number.long";
     
+    public static final int SQS_LIST_QUEUES_LIMIT = 1000;
+    
     private SQSQueueUtils() {
         // Never instantiated
     }
