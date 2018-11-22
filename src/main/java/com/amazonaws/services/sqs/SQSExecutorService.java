@@ -1,5 +1,9 @@
 package com.amazonaws.services.sqs;
 
+import static com.amazonaws.services.sqs.SQSQueueUtils.booleanMessageAttributeValue;
+import static com.amazonaws.services.sqs.SQSQueueUtils.getBooleanMessageAttributeValue;
+import static com.amazonaws.services.sqs.SQSQueueUtils.getStringMessageAttributeValue;
+import static com.amazonaws.services.sqs.SQSQueueUtils.stringMessageAttributeValue;
 import static com.amazonaws.util.StringUtils.UTF8;
 
 import java.io.ObjectStreamException;
@@ -7,6 +11,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
@@ -22,6 +27,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amazonaws.services.sqs.model.Message;
@@ -65,19 +71,19 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	
 	private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 	
-	public SQSExecutorService(AmazonSQS sqs, String queueUrl) {
+	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl) {
 		this(sqs, queueUrl, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
 	}
 
-	public SQSExecutorService(AmazonSQS sqs, String queueUrl, String executorID) {
+	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
 	    this(sqs, queueUrl, executorID, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
 	}
  
-	public SQSExecutorService(AmazonSQS sqs, String queueUrl, String executorID, InvertibleFunction<Object, String> serializer) {
-		this.sqs = sqs;
-		this.sqsResponseClient = new AmazonSQSResponsesClient(sqs);
+	public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID, InvertibleFunction<Object, String> serializer) {
+		this.sqs = sqs.getAmazonSQS();
+	    this.sqsResponseClient = sqs;
 		this.queueUrl = queueUrl;
-		this.messageConsumer = new SQSMessageConsumer(sqs, queueUrl, this::accept);
+		this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept);
 		this.executorID = executorID;
 		this.reference = new Reference(executorID);
 
@@ -107,17 +113,17 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 
 	// TODO-RS: Local repeating task to remove these when expired?
 	private static class Metadata {
-		private final String deduplicationID;
+		private final Optional<String> deduplicationID;
 	    private String uuid;
 		private final long expiry;
-		private String serializedResult;
+		private Optional<String> serializedResult;
 		
-		public Metadata(String deduplicationID, String uuid) {
+		public Metadata(Optional<String> deduplicationID, String uuid) {
 			// TODO-RS: Clock drift!
-			this(deduplicationID, uuid, System.currentTimeMillis() + DEDUPLICATION_WINDOW_MILLIS, null);
+			this(deduplicationID, uuid, System.currentTimeMillis() + DEDUPLICATION_WINDOW_MILLIS, Optional.empty());
 		}
 		
-		private Metadata(String deduplicationID, String uuid, long expiry, String serializedResult) {
+		private Metadata(Optional<String> deduplicationID, String uuid, long expiry, Optional<String> serializedResult) {
 			this.deduplicationID = deduplicationID;
 		    this.uuid = uuid;
 			this.expiry = expiry;
@@ -126,78 +132,76 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		
 		public static Metadata fromTag(String serialized) {
 		    String[] parts = serialized.split(":");
-			return new Metadata(parts[0].equals("null") ? null : parts[0], 
+			return new Metadata(Optional.of(parts[0]).filter(s -> !"null".equals(s)), 
 			                    parts[1], 
 			                    Long.parseLong(parts[2]),
-			                    parts[3].equals("null") ? null : parts[3]);
+			                    Optional.of(parts[3]).filter(s -> !"null".equals(s)));
 		}
 		
-		public boolean isDuplicate(SQSFutureTask<?> task) {
+		public static Metadata fromMessageContent(MessageContent messageContent) {
+		    String uuid = getStringMessageAttributeValue(messageContent.getMessageAttributes(), SQSFutureTask.UUID_ATTRIBUTE_NAME).get();
+		    Optional<String> deduplicationID = getStringMessageAttributeValue(messageContent.getMessageAttributes(), SQSFutureTask.DEDUPLICATION_ID_ATTRIBUTE_NAME);
+            return new Metadata(deduplicationID, uuid);
+        }
+        
+        public boolean shouldNotRun(SQSFutureTask<?> task) {
 			// TODO-RS: Leverage SentTimestamp and ApproximateFirstReceiveTimestamp
 			// to fight clock drift.
-			return !isExpired() && deduplicationID != null && !uuid.equals(task.metadata.uuid);
+            if (isExpired()) {
+                return false;
+            } else if (isDuplicate(task)) {
+                return true;
+            } else if (serializedResult.isPresent()) {
+                return true;
+            } else {
+                return false;
+            }
 		}
 		
+        public boolean isDuplicate(SQSFutureTask<?> task) {
+            return deduplicationID.isPresent() && !uuid.equals(task.metadata.uuid);
+        }
+        
 		public boolean isExpired() {
 			return System.currentTimeMillis() > expiry;
 		}
 		
 		public void saveToTag(AmazonSQS sqs, String queueUrl) {
-		    String key = deduplicationID != null ? deduplicationID : uuid;
-		    // TODO-RS: clean up serialization
+		    String key = deduplicationID.orElse(uuid);
 		    sqs.tagQueue(queueUrl, Collections.singletonMap(key, toString()));
 		}
 		
 		@Override
 		public String toString() {
+		    // TODO-RS: clean up serialization
 			StringBuilder builder = new StringBuilder();
-			builder.append(deduplicationID);
+			builder.append(deduplicationID.orElse("null"));
             builder.append(':');
             builder.append(uuid);
 			builder.append(':');
 			builder.append(expiry);
 		    builder.append(':');
-            builder.append(serializedResult);
+            builder.append(serializedResult.orElse("null"));
 			return builder.toString();
 		}
 	}
 	
 	@Override
 	protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
-		return new SQSFutureTask<>(callable, true);
+	    MessageContent messageContent = toMessageContent(callable);
+	    addDeduplicationAttributes(messageContent, callable);
+        return new SQSFutureTask<>(callable, messageContent, true);
 	}
 	
-    /**
-     * A callable that runs given task and returns given result
-     */
-    static final class SerializableRunnableAdapter<T> implements SerializableCallable<T> {
-		private static final long serialVersionUID = 6853711467712316443L;
-		final Runnable task;
-        final T result;
-        SerializableRunnableAdapter(Runnable task, T result) {
-            this.task = task;
-            this.result = result;
-        }
-        
-        @Override
-        public T call() {
-            task.run();
-            return result;
-        }
-    }
-	
-    protected static <T> SerializableCallable<T> callable(Runnable runnable, T value) {
-    	SerializableCallable<T> result = new SerializableRunnableAdapter<>(runnable, value);
-    	if (runnable instanceof DeduplicatedRunnable) {
-    		return DeduplicatedCallable.deduplicated(result, ((DeduplicatedRunnable)runnable).deduplicationID());
-    	} else {
-    		return result;
-    	}
+	@Override
+    protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
+        return newTaskFor(runnable, value, true);
     }
     
-	@Override
-	protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
-		return new SQSFutureTask<>(callable(runnable, value), true);
+	private <T> SQSFutureTask<T> newTaskFor(Runnable runnable, T value, boolean withResponse) {
+	    MessageContent messageContent = toMessageContent(runnable);
+	    addDeduplicationAttributes(messageContent, runnable);
+        return new SQSFutureTask<>(Executors.callable(runnable, value), messageContent, withResponse);
 	}
 	
 	protected void accept(Message message) {
@@ -211,8 +215,7 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 	protected SQSFutureTask<?> deserializeTask(Message message) {
 		currentDeserializer.set(this);
 		try {
-			Callable<?> callable = (Callable<?>)serializer.unapply(message.getBody());
-			return new SQSFutureTask<>(callable, message);
+			return new SQSFutureTask<>(message);
 		} finally {
 			currentDeserializer.set(null);
 		}
@@ -222,82 +225,101 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		if (runnable instanceof SQSFutureTask<?>) {
 			return (SQSFutureTask<?>)runnable;
 		} else {
-			return new SQSFutureTask<>(callable(runnable, null), false);
+			return newTaskFor(runnable, null, false);
 		}
 	}
 	
+	protected MessageContent toMessageContent(Runnable runnable) {
+	    MessageContent messageContent = new MessageContent(serializer.apply(runnable));
+	    addDeduplicationAttributes(messageContent, runnable);
+	    return messageContent;
+	}
+	
+	protected MessageContent toMessageContent(Callable<?> callable) {
+	    MessageContent messageContent = new MessageContent(serializer.apply(callable));
+	    messageContent.setMessageAttributesEntry(SQSFutureTask.IS_CALLABLE_ATTRIBUTE_NAME, booleanMessageAttributeValue(true));
+	    addDeduplicationAttributes(messageContent, callable);
+        return messageContent;
+    }
+    
+	private void addDeduplicationAttributes(MessageContent messageContent, Object task) {
+	    if (task instanceof Deduplicated) {
+	        String deduplicationID = ((Deduplicated)task).deduplicationID();
+            if (deduplicationID == null) {
+                String body = messageContent.getMessageBody();
+                deduplicationID = BinaryUtils.toHex(Md5Utils.computeMD5Hash(body.getBytes(UTF8)));
+            }
+            messageContent.setMessageAttributesEntry(SQSFutureTask.DEDUPLICATION_ID_ATTRIBUTE_NAME,
+                    stringMessageAttributeValue(deduplicationID));
+	    }
+	    messageContent.setMessageAttributesEntry(SQSFutureTask.UUID_ATTRIBUTE_NAME,
+                stringMessageAttributeValue(UUID.randomUUID().toString()));
+	}
+	
+    @SuppressWarnings("unchecked")
+    private <T> Callable<T> callableFromMessage(Message message) {
+        Object deserialized = serializer.unapply(message.getBody());
+        boolean isCallable = getBooleanMessageAttributeValue(message.getMessageAttributes(), SQSFutureTask.IS_CALLABLE_ATTRIBUTE_NAME);
+        if (isCallable) {
+            return (Callable<T>)deserialized;
+        } else {
+            return Executors.callable((Runnable)deserialized, null);
+        }
+    }
+    
 	// TODO-RS: Make this static?
 	protected class SQSFutureTask<T> extends FutureTask<T> {
 
 		private static final String DEDUPLICATION_ID_ATTRIBUTE_NAME = "DeduplicationID";
 		private static final String UUID_ATTRIBUTE_NAME = "UUID";
-		
-		protected final Callable<T> callable;
-		
-		private Metadata metadata;
+		private static final String IS_CALLABLE_ATTRIBUTE_NAME = "IsCallable";
+        
+		private final Metadata metadata;
 		
 		private final boolean withResponse;
 		protected final InvertibleFunction<Future<T>, String> futureSerializer = new CompletedFutureToMessageSerializer<>(serializer);
 	    
-		private MessageContent requestMessageContent;
+		protected final MessageContent messageContent;
 		
-		// TODO-RS: The response will come either from a message or the deduplication metadata on the tags.
+		// TODO-RS: The result will come either from a response message or
+		// polling the deduplication metadata on the tags.
 		// Is there a good way to have the same thread pool do one or the other?
-		private Future<?> resultFuture;
+		private Optional<Future<?>> resultFuture;
 		
-		public SQSFutureTask(Callable<T> callable, boolean withResponse) {
+		public SQSFutureTask(Callable<T> callable, MessageContent messageContent, boolean withResponse) {
 			super(callable);
-			this.callable = callable;
+			this.messageContent = messageContent;
 			this.withResponse = withResponse;
-			String deduplicationID = null;
-			if (callable instanceof Deduplicated) {
-				deduplicationID = ((Deduplicated)callable).deduplicationID();
-				if (deduplicationID == null) {
-					try {
-						String serializedCallable = serializer.apply(callable);
-						deduplicationID = BinaryUtils.toHex(Md5Utils.computeMD5Hash(serializedCallable.getBytes(UTF8)));
-					} catch (Exception e) {
-						throw new RejectedExecutionException(e);
-					}
-				}
-			}
-			this.metadata = new Metadata(deduplicationID, UUID.randomUUID().toString());
+			this.metadata = Metadata.fromMessageContent(messageContent);
+			this.resultFuture = Optional.empty();
 		}
 
-		public SQSFutureTask(Callable<T> callable, Message message) {
-			super(callable);
-			this.callable = callable;
-			this.requestMessageContent = MessageContent.fromMessage(message);
-			this.withResponse = sqsResponseClient.isResponseMessageRequested(requestMessageContent);
-			String uuid = getStringAttributeValue(message, UUID_ATTRIBUTE_NAME);
-            String deduplicationID = getStringAttributeValue(message, DEDUPLICATION_ID_ATTRIBUTE_NAME);
-		    metadata = new Metadata(deduplicationID, uuid);
+		public SQSFutureTask(Message message) {
+			super(callableFromMessage(message));
+			this.messageContent = MessageContent.fromMessage(message);
+			this.withResponse = sqsResponseClient.isResponseMessageRequested(messageContent);
+			this.metadata = Metadata.fromMessageContent(messageContent);
+			this.resultFuture = Optional.empty();
 		}
 		
-		private Metadata getMetadataFromTags() {
+		private Optional<Metadata> getMetadataFromTags() {
 			Map<String, String> tags = sqs.listQueueTags(queueUrl).getTags();
-			String serializedValue;
-			if (metadata.deduplicationID != null) {
-			    serializedValue = tags.get(metadata.deduplicationID);
-			} else {
-			    serializedValue = tags.get(metadata.uuid);
-			}
-			return serializedValue != null ? Metadata.fromTag(serializedValue) : null;
+			return Optional.ofNullable(tags.get(metadata.deduplicationID.orElse(metadata.uuid)))
+			               .map(Metadata::fromTag);
 		}
 		
 		protected void send() {
-		    Metadata existingMetadata = getMetadataFromTags();
-		    if (existingMetadata != null && (existingMetadata.isDuplicate(this) || existingMetadata.serializedResult != null)) {
+		    if (getMetadataFromTags().filter(existingMetadata -> existingMetadata.shouldNotRun(this)).isPresent()) {
 		        if (withResponse) {
     		        // This will immediately complete the future and cancel itself if the metadata
     		        // already has the result set.
-		            resultFuture = dedupedResultPoller.scheduleWithFixedDelay(
-    			            this::pollForResultFromMetadata, 0, 2, TimeUnit.SECONDS);
+		            resultFuture = Optional.of(dedupedResultPoller.scheduleWithFixedDelay(
+    			            this::pollForResultFromMetadata, 0, 2, TimeUnit.SECONDS));
 		        }
 				return;
 		    }
 			
-			SendMessageRequest request = serialize();
+			SendMessageRequest request = toSendMessageRequest();
 			
 			if (withResponse) {
 			    CompletableFuture<Message> responseFuture = sqsResponseClient.sendMessageAndGetResponseAsync(
@@ -309,47 +331,28 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 			            setFromResponse(result.getBody());
 			        }
 			    });
-			    this.resultFuture = responseFuture;
+			    this.resultFuture = Optional.of(responseFuture);
 			} else {
 				sqs.sendMessage(request);
 			}
 			
 			// Tag afterwards, so that the race condition will result in duplicate receives rather than
 			// potentially deduping all copies.
-			if (metadata.deduplicationID != null) {
+			if (metadata.deduplicationID.isPresent()) {
 			    metadata.saveToTag(sqs, queueUrl);
 			}
 		}
 		
-		public SendMessageRequest serialize() {
-			SendMessageRequest request = new SendMessageRequest()
-					.withQueueUrl(queueUrl)
-					.withMessageBody(serializer.apply(callable));
-			if (metadata != null) {
-			    request.addMessageAttributesEntry(UUID_ATTRIBUTE_NAME, stringAttributeValue(metadata.uuid));
-			    if (metadata.deduplicationID != null) {
-			        request.addMessageAttributesEntry(DEDUPLICATION_ID_ATTRIBUTE_NAME, stringAttributeValue(metadata.deduplicationID));
-			    }
-			}
-			return request;
-		}
-		
-		private MessageAttributeValue stringAttributeValue(String value) {
-			return new MessageAttributeValue().withDataType("String").withStringValue(value);
-		}
-		
-		protected String getStringAttributeValue(Message message, String attributeName) {
-			MessageAttributeValue value = message.getMessageAttributes().get(attributeName);
-			return value != null ? value.getStringValue() : null; 
+		public SendMessageRequest toSendMessageRequest() {
+			return messageContent.toSendMessageRequest().withQueueUrl(queueUrl);
 		}
 		
 		private void pollForResultFromMetadata() {
-		    Metadata metadata = getMetadataFromTags();
-		    if (metadata == null) {
-		        // TODO-RS: This should be a timeout instead
-		        cancel(false);
-		    } else if (metadata.serializedResult != null) {
-		        setFromResponse(metadata.serializedResult);
+		    Optional<Metadata> tagMetadata = getMetadataFromTags();
+		    if (tagMetadata.isPresent()) {
+		        tagMetadata.get().serializedResult.ifPresent(this::setFromResponse);
+		    } else { 
+                setException(new TimeoutException());
 		    }
 		}
 		
@@ -369,33 +372,27 @@ public class SQSExecutorService extends AbstractExecutorService implements Seria
 		
 		@Override
 		public void run() {
-		    Metadata existingMetadata = getMetadataFromTags();
-		    if (existingMetadata != null) {
-		        if (existingMetadata.isDuplicate(this)) {
-		            return;
-		        } else if (existingMetadata.serializedResult != null) {
-		            setFromResponse(existingMetadata.serializedResult);
-	            }
+		    Optional<Metadata> maybeMetadata = getMetadataFromTags();
+            if (maybeMetadata.filter(existingMetadata -> existingMetadata.shouldNotRun(this)).isPresent()) {
+	            maybeMetadata.get().serializedResult.ifPresent(this::setFromResponse);
+		        return;
 		    }
 
-			super.run();
+		    super.run();
 		}
 		
 		@Override
 		protected void done() {
-		    if (resultFuture != null) {
-		        resultFuture.cancel(false);
-		    }
+		    resultFuture.ifPresent(f -> f.cancel(false));
 		    
 		    String response = futureSerializer.apply(this);
             
-			if (requestMessageContent != null && sqsResponseClient.isResponseMessageRequested(requestMessageContent)) {
-	            MessageContent responseMessage = new MessageContent(response);
-	            sqsResponseClient.sendResponseMessage(requestMessageContent, responseMessage);
+			if (withResponse) {
+	            sqsResponseClient.sendResponseMessage(messageContent, new MessageContent(response));
 			}
 			
-			if (metadata.deduplicationID != null || isCancelled()) {
-                metadata.serializedResult = response;
+			if (metadata.deduplicationID.isPresent() || isCancelled()) {
+                metadata.serializedResult = Optional.of(response);
                 metadata.saveToTag(sqs, queueUrl);
             }
 		}

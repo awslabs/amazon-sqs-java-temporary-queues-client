@@ -22,8 +22,6 @@ public class SQSMessageConsumer {
 	protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 	protected long deadlineNanos = -1;
 	
-	// TODO: batch size, long polling, scale threads up and down...
-	
 	protected final ExecutorService executor;
 	protected final Runnable shutdownHook;
 	

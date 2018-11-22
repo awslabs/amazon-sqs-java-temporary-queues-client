@@ -66,9 +66,6 @@ public class ExecutorUtils {
     	return x -> getOn(executor, () -> fn.apply(x));
     }
 
-    public interface SerializableIntFunction<R> extends Serializable, IntFunction<R> {
-    }
-    
     public static <T> IntFunction<T> applyIntOn(ExecutorService executor, SerializableIntFunction<T> fn) {
     	return x -> getOn(executor, () -> fn.apply(x));
     }

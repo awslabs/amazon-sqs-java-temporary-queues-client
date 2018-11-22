@@ -29,7 +29,7 @@ import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
 
 // TODO-RS: More careful/efficient concurrency!
 // TODO-RS: Respect IdleQueueRetentionPeriodSeconds as well.
-public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
+class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     
     public static final String VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE = "HostQueueUrl";
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";

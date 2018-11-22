@@ -4,11 +4,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public interface AmazonSQSWithResponses {
 
+    AmazonSQS getAmazonSQS();
+    
     /**
      * Sends a message and waits the given amount of time for
      * the response message.

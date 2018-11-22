@@ -87,10 +87,13 @@ public class ReceiveQueueBuffer {
     /** finished batches are stored in this list. */
     protected LinkedList<ReceiveMessageBatchTask> finishedTasks = new LinkedList<>();
 
-    public ReceiveQueueBuffer(AmazonSQS paramSQS, String queuUrl) {
+    public ReceiveQueueBuffer(AmazonSQS paramSQS, String queueUrl) {
         sqsClient = paramSQS;
+        if (queueUrl.endsWith(".fifo")) {
+            throw new IllegalArgumentException("FIFO queues are not yet supported: " + queueUrl);
+        }
         
-        GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest().withQueueUrl(queuUrl)
+        GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest().withQueueUrl(queueUrl)
                 .withAttributeNames(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
                 					QueueAttributeName.VisibilityTimeout.toString());
         // TODO-RS: UserAgent?
@@ -315,14 +318,6 @@ public class ReceiveQueueBuffer {
         satisfyFuturesFromBuffer();
     }
 
-    public void messagesDeleted(Collection<String> receiptHandles) {
-        // No-op
-    }
-    
-    public void messageVisibilitiesChanged(Collection<String> receiptHandles) {
-        // No-op
-    }
-    
     /**
      * Clears and nacks any pre-fetched messages in this buffer.
      */

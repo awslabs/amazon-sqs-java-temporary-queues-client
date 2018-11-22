@@ -1,15 +1,21 @@
 package com.amazonaws.services.sqs;
 
+import static com.amazonaws.services.sqs.SQSQueueUtils.getLongMessageAttributeValue;
+import static com.amazonaws.services.sqs.SQSQueueUtils.longMessageAttributeValue;
+import static java.util.concurrent.Executors.callable;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.MessageSystemAttributeName;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.responsesapi.MessageContent;
 
 public class SQSScheduledExecutorService extends SQSExecutorService implements ScheduledExecutorService {
 
@@ -17,14 +23,18 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
     // refreshes the deduplication timeout without any race conditions.
 	private static final long MAX_SQS_DELAY_SECONDS = TimeUnit.SECONDS.convert(15, TimeUnit.MINUTES);  
 	
-	public SQSScheduledExecutorService(AmazonSQS sqs, String queueUrl) {
+	public SQSScheduledExecutorService(AmazonSQSWithResponses sqs, String queueUrl) {
 		super(sqs, queueUrl);
 	}
 
-	public SQSScheduledExecutorService(AmazonSQS sqs, String queueUrl, String executorID) {
+	public SQSScheduledExecutorService(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
 		super(sqs, queueUrl, executorID);
 	}
 
+	/**
+	 * A scheduled version of an SQS task. Strongly modeled after
+	 * {@link ScheduledThreadPoolExecutor#ScheduledFutureTask}.
+	 */
 	private class ScheduledSQSFutureTask<T> extends SQSFutureTask<T> implements ScheduledFuture<T> {
 
 		private static final String DELAY_NANOS_ATTRIBUTE_NAME = "DelayNanos";
@@ -47,38 +57,40 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
          */
         private long time;
 		
-        public ScheduledSQSFutureTask(Callable<T> callable, boolean withResponse, long delay, long period, TimeUnit unit) {
-        	super(callable, withResponse);
+        public ScheduledSQSFutureTask(Callable<T> callable, MessageContent messageContent, boolean withResponse, long delay, long period, TimeUnit unit) {
+        	super(callable, messageContent, withResponse);
         	
         	if (unit.ordinal() < TimeUnit.SECONDS.ordinal()) {
     			throw new IllegalArgumentException("Delays at this precision not supported: " + unit);
     		}
         	this.delay = unit.toNanos(delay);
     		this.period = unit.toNanos(period);
-        	
+    		
+            messageContent.setMessageAttributesEntry(DELAY_NANOS_ATTRIBUTE_NAME, 
+                    longMessageAttributeValue(delay));
+            messageContent.setMessageAttributesEntry(PERIOD_NANOS_ATTRIBUTE_NAME, 
+                    longMessageAttributeValue(period));
+
     		this.time = getTime(delay);
         }
         
-        public ScheduledSQSFutureTask(Callable<T> callable, Message message) {
-        	super(callable, message);
+        public ScheduledSQSFutureTask(Message message) {
+        	super(message);
         	
-        	this.delay = getLongAttributeValue(message, DELAY_NANOS_ATTRIBUTE_NAME);
-        	this.period = getLongAttributeValue(message, PERIOD_NANOS_ATTRIBUTE_NAME);
+        	this.delay = getLongMessageAttributeValue(messageContent.getMessageAttributes(), DELAY_NANOS_ATTRIBUTE_NAME).orElse(0L);
+        	this.period = getLongMessageAttributeValue(messageContent.getMessageAttributes(), PERIOD_NANOS_ATTRIBUTE_NAME).orElse(0L);
         	
         	decrementDelay(message);
         	this.time = getTime(delay);
 		}
-
-        private long getLongAttributeValue(Message message, String attributeName) {
-        	String value = getStringAttributeValue(message, attributeName);
-        	return value != null ? Long.parseLong(value) : 0;
-        }
         
         protected void decrementDelay(Message message) {
         	long sendTimestamp = Long.parseLong(message.getAttributes().get(MessageSystemAttributeName.SentTimestamp.toString()));
 			long receiveTimestamp = Long.parseLong(message.getAttributes().get(MessageSystemAttributeName.ApproximateFirstReceiveTimestamp.toString()));
 			long dwellTime = receiveTimestamp - sendTimestamp;
 			this.delay -= TimeUnit.NANOSECONDS.convert(dwellTime, TimeUnit.MILLISECONDS);
+			messageContent.setMessageAttributesEntry(DELAY_NANOS_ATTRIBUTE_NAME, 
+			        longMessageAttributeValue(delay));
         }
         
         private long getTime(long delay) {
@@ -112,14 +124,9 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
 		}
 		
 		@Override
-		public SendMessageRequest serialize() {
-			SendMessageRequest request = super.serialize();
+		public SendMessageRequest toSendMessageRequest() {
+			SendMessageRequest request = super.toSendMessageRequest();
 			
-			request.addMessageAttributesEntry(DELAY_NANOS_ATTRIBUTE_NAME, 
-					new MessageAttributeValue().withDataType("Number").withStringValue(Long.toString(delay)));
-			request.addMessageAttributesEntry(PERIOD_NANOS_ATTRIBUTE_NAME, 
-					new MessageAttributeValue().withDataType("Number").withStringValue(Long.toString(period)));
-
 			int sqsDelaySeconds = (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(delay), MAX_SQS_DELAY_SECONDS);
 			if (sqsDelaySeconds < 0) {
 				sqsDelaySeconds = 1;
@@ -172,25 +179,27 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
 	protected SQSFutureTask<?> deserializeTask(Message message) {
 		currentDeserializer.set(this);
 		try {
-			Callable<?> callable = (Callable<?>)serializer.unapply(message.getBody());
-			return new ScheduledSQSFutureTask<>(callable, message);
+			return new ScheduledSQSFutureTask<>(message);
 		} finally {
 			currentDeserializer.set(null);
 		}
 	}
 	
 	public void delayedExecute(Runnable runnable, long delay, TimeUnit unit) {
-		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(callable(runnable, null), false, delay, 0, unit);
+		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(
+		        callable(runnable, null), toMessageContent(runnable), false, delay, 0, unit);
 		execute(task);
 	}
 
 	public void repeatWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit unit) {
-		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(callable(runnable, null), false, initialDelay, delay, unit);
+		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(
+		        callable(runnable, null), toMessageContent(runnable), false, initialDelay, delay, unit);
 		execute(task);
 	}
 
 	public void repeatAtFixedRate(Runnable runnable, long initialDelay, long delay, TimeUnit unit) {
-		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(callable(runnable, null), false, initialDelay, -delay, unit);
+		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(
+		        callable(runnable, null), toMessageContent(runnable), false, initialDelay, -delay, unit);
 		execute(task);
 	}
 	
@@ -201,21 +210,24 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
 
 	@Override
 	public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
-		ScheduledSQSFutureTask<V> task = new ScheduledSQSFutureTask<>(callable, true, delay, 0, unit);
+		ScheduledSQSFutureTask<V> task = new ScheduledSQSFutureTask<>(
+		        callable, toMessageContent(callable), true, delay, 0, unit);
 		execute(task);
 		return task;
 	}
 
 	@Override
 	public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
-		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(callable(command, null), true, initialDelay, period, unit);
+		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(
+		        callable(command, null), toMessageContent(command), true, initialDelay, period, unit);
 		execute(task);
 		return task;
 	}
 
 	@Override
 	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
-		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(callable(command, null), true, initialDelay, -delay, unit);
+		ScheduledSQSFutureTask<?> task = new ScheduledSQSFutureTask<>(
+		        callable(command, null), toMessageContent(command), true, initialDelay, -delay, unit);
 		execute(task);
 		return task;
 	}

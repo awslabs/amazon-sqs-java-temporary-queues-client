@@ -39,6 +39,11 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
     }
     
     @Override
+    public AmazonSQS getAmazonSQS() {
+        return sqs;
+    }
+    
+    @Override
 	public Message sendMessageAndGetResponse(SendMessageRequest request, int timeout, TimeUnit unit) throws TimeoutException {
         return waitForFuture(sendMessageAndGetResponseAsync(request, timeout, unit), timeout, unit);
 	}

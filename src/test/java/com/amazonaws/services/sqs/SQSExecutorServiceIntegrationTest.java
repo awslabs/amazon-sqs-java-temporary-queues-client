@@ -38,10 +38,12 @@ import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 
 public class SQSExecutorServiceIntegrationTest {
     
     private static AmazonSQS sqs;
+    private static AmazonSQSWithResponses sqsResponseClient;
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
@@ -49,7 +51,7 @@ public class SQSExecutorServiceIntegrationTest {
     private static List<Throwable> taskExceptions = new ArrayList<>();
     
     private static class SQSExecutorWithAssertions extends SQSExecutorService {
-    	public SQSExecutorWithAssertions(AmazonSQS sqs, String queueUrl, String executorID) {
+    	public SQSExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl, String executorID) {
 			super(sqs, queueUrl, executorID);
 		}
 
@@ -72,6 +74,7 @@ public class SQSExecutorServiceIntegrationTest {
                 .withRegion(Regions.US_WEST_2)
 //                .withCredentials(credentialsProvider)
                 .build();
+        sqsResponseClient = new AmazonSQSResponsesClient(sqs);
         queueUrl = sqs.createQueue(TestUtils.generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
@@ -100,13 +103,13 @@ public class SQSExecutorServiceIntegrationTest {
     }
     
     private SQSExecutorService createExecutor(String queueUrl) {
-    	SQSExecutorService executor = new SQSExecutorWithAssertions(sqs, queueUrl, null);
+    	SQSExecutorService executor = new SQSExecutorWithAssertions(sqsResponseClient, queueUrl, null);
     	executors.add(executor);
         return executor;
     }
     
     private SQSScheduledExecutorService createScheduledExecutor(String queueUrl) {
-    	SQSScheduledExecutorService executor = new SQSScheduledExecutorService(sqs, queueUrl, null);
+    	SQSScheduledExecutorService executor = new SQSScheduledExecutorService(sqsResponseClient, queueUrl, null);
     	executors.add(executor);
         return executor;
     }
@@ -355,6 +358,11 @@ public class SQSExecutorServiceIntegrationTest {
     
     @Test
     public void deduplicationOnSendingResponse() {
+        // TODO-RS
+    }
+    
+    @Test
+    public void deserializeTaskError() {
         // TODO-RS
     }
 }

@@ -8,8 +8,12 @@ import java.util.concurrent.ConcurrentMap;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.CreateQueueResult;
+import com.amazonaws.services.sqs.model.QueueAttributeName;
 
-public class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
+/**
+ * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
+ */
+class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final String HOST_QUEUE_NAME_PREFIX = "__HostQueue";
     
@@ -38,9 +42,15 @@ public class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapp
     private static AmazonSQS makeWrappedClient(AmazonSQS sqs) {
         // TODO-RS: Determine the right strategy for naming the sweeping queue.
         // It needs to be shared between different clients, but testing friendly!
-        // TODO-RS: Configure a tight MessageRetentionPeriod
-        String sweepingQueueUrl = sqs.createQueue(HOST_QUEUE_NAME_PREFIX + "_Sweeping").getQueueUrl();
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
+        // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
+        // into other configuration as well.
+        CreateQueueRequest request = new CreateQueueRequest()
+                .withQueueName(HOST_QUEUE_NAME_PREFIX + "Sweeper")
+                // Server-side encryption is important here because we're putting
+                // queue URLs into this queue.
+                .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
+        String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
+        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(new AmazonSQSResponsesClient(sqs), HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
         return new AmazonSQSVirtualQueuesClient(deleter);
     }
     

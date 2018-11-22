@@ -44,9 +44,10 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
+import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 
 // Also check if a queue was CHECKED for idleness recently.
-public class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
+class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
 	// Publicly visible constants
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
@@ -61,7 +62,7 @@ public class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWra
     	
     	private static final int SQS_LIST_QUEUES_LIMIT = 1000;
     	
-        public IdleQueueSweeper(AmazonSQS sqs, String queueUrl, String queueNamePrefix) {
+        public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix) {
 			super(sqs, queueUrl, null);
 			// TODO-RS: Configuration
 	        repeatAtFixedRate(deduplicated(() -> checkQueuesForIdleness(queueNamePrefix)), 
@@ -123,15 +124,15 @@ public class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWra
     
     private final IdleQueueSweeper idleQueueSweeper;
     
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS amazonSqsToBeExtended, String queueNamePrefix) {
-    	this(amazonSqsToBeExtended, queueNamePrefix, null);
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQSWithResponses sqs, String queueNamePrefix) {
+    	this(sqs, queueNamePrefix, null);
     }
     
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS amazonSqsToBeExtended, String queueNamePrefix, String rootQueueUrl) {
-        super(amazonSqsToBeExtended);
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQSWithResponses sqs, String queueNamePrefix, String rootQueueUrl) {
+        super(sqs.getAmazonSQS());
         this.queueNamePrefix = queueNamePrefix;
         if (rootQueueUrl != null) {
-        	this.idleQueueSweeper = new IdleQueueSweeper(amazonSqsToBeExtended, rootQueueUrl, queueNamePrefix);
+        	this.idleQueueSweeper = new IdleQueueSweeper(sqs, rootQueueUrl, queueNamePrefix);
         } else {
         	this.idleQueueSweeper = null;
         }
@@ -139,10 +140,6 @@ public class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWra
     
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
-    	return createQueue(request, true);
-    }
-    
-    public CreateQueueResult createQueue(CreateQueueRequest request, boolean withHeartbeating) {
         if (!request.getAttributes().containsKey(IDLE_QUEUE_RETENTION_PERIOD)) {
             return super.createQueue(request);
         }
@@ -173,10 +170,8 @@ public class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWra
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
 		queues.put(queueUrl, metadata);
         
-		if (withHeartbeating) {
-	        metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(queueUrl), 
-	                0, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
-		}
+        metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(queueUrl), 
+                0, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
 		
         return result;
     }

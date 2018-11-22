@@ -7,30 +7,69 @@ import static com.amazonaws.services.sqs.ExecutorUtils.applyIntOn;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.fasterxml.jackson.annotation.JsonFormat.Value;
 
 public class SQSQueueUtils {
 
-	// https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html
+    private SQSQueueUtils() {
+        // Never instantiated
+    }
+    
+    public static final String MESSAGE_ATTRIBUTE_TYPE_STRING = "String";
+    public static final String MESSAGE_ATTRIBUTE_TYPE_BOOLEAN = "String.boolean";
+    public static final String MESSAGE_ATTRIBUTE_TYPE_LONG = "Number.long";
+    
+    public static MessageAttributeValue stringMessageAttributeValue(String value) {
+        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_STRING)
+                                          .withStringValue(value);
+    }
+    
+    public static MessageAttributeValue longMessageAttributeValue(long value) {
+        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_LONG)
+                                          .withStringValue(Long.toString(value));
+    }
+    
+    public static MessageAttributeValue booleanMessageAttributeValue(boolean value) {
+        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_BOOLEAN)
+                                          .withStringValue(Boolean.toString(value));
+    }
+    
+    public static Optional<String> getStringMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
+        return Optional.ofNullable(messageAttributes.get(key))
+                       .filter(value -> MESSAGE_ATTRIBUTE_TYPE_STRING.equals(value.getDataType()))
+                       .map(MessageAttributeValue::getStringValue);
+    }
+    
+    public static Optional<Long> getLongMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
+        return Optional.ofNullable(messageAttributes.get(key))
+                       .filter(value -> MESSAGE_ATTRIBUTE_TYPE_LONG.equals(value.getDataType()))
+                       .map(MessageAttributeValue::getStringValue)
+                       .map(Long::parseLong);
+    }
+    
+    public static boolean getBooleanMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
+        return Optional.ofNullable(messageAttributes.get(key))
+                       .filter(value -> MESSAGE_ATTRIBUTE_TYPE_BOOLEAN.equals(value.getDataType()))
+                       .map(MessageAttributeValue::getStringValue)
+                       .map(Boolean::parseBoolean).orElse(false);
+    }
+    
+    // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html
     private static final String VALID_QUEUE_NAME_CHARACTERS;
     static {
     	StringBuilder builder = new StringBuilder();

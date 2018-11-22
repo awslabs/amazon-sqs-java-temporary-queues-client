@@ -78,7 +78,7 @@ public class SQSExecutorWithVirtualQueuesTest {
     
     @Test
     public void parallelMap() throws InterruptedException, ExecutionException, TimeoutException {
-        SQSExecutorService executor = new SQSExecutorService(sqs, requestQueueUrl, null);
+        SQSExecutorService executor = new SQSExecutorService(rpcClient, requestQueueUrl, null);
     	int sum = IntStream.range(0, 10)
     					   .parallel()
     				       .mapToObj(applyIntOn(executor, i -> i * i))
