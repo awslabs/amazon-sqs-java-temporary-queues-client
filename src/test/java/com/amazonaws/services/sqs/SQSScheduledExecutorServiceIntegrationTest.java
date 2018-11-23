@@ -60,14 +60,6 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
             return thisExecutor.withScope(localScope, () -> super.deserializeTask(message));
         }
 
-        @Override
-        protected void afterExecute(Runnable r, Throwable t) {
-            if (t != null) {
-                taskExceptions.add(t);
-                t.printStackTrace();
-            }
-        }
-
         protected Object writeReplace() throws ObjectStreamException {
             return thisExecutor;
         }

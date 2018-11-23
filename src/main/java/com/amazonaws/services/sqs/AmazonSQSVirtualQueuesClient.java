@@ -107,7 +107,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         try {
             return queue.receiveMessageAsync(request)
-                    .get(request.getWaitTimeSeconds(), TimeUnit.SECONDS);
+                        .get(request.getWaitTimeSeconds(), TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             // Fall through to an empty receive
         } catch (ExecutionException e) {

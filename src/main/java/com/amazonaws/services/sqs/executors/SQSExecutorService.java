@@ -181,10 +181,6 @@ public class SQSExecutorService extends AbstractExecutorService {
         deserializeTask(message).run();
     }
 
-    protected void afterExecute(Runnable r, Throwable t) {
-        // To be overridden by subclasses
-    }
-
     protected SQSFutureTask<?> deserializeTask(Message message) {
         return new SQSFutureTask<>(message);
     }
@@ -265,7 +261,7 @@ public class SQSExecutorService extends AbstractExecutorService {
         public SQSFutureTask(Message message) {
             super(callableFromMessage(message));
             this.messageContent = MessageContent.fromMessage(message);
-            this.withResponse = sqsResponseClient.isResponseMessageRequested(messageContent);
+            this.withResponse = false;
             this.metadata = Metadata.fromMessageContent(messageContent);
             this.resultFuture = Optional.empty();
         }
@@ -355,7 +351,7 @@ public class SQSExecutorService extends AbstractExecutorService {
 
             String response = futureSerializer.apply(this);
 
-            if (withResponse) {
+            if (sqsResponseClient.isResponseMessageRequested(messageContent)) {
                 sqsResponseClient.sendResponseMessage(messageContent, new MessageContent(response));
             }
 

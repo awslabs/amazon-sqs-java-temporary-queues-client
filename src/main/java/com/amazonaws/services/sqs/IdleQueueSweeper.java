@@ -29,6 +29,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
         super(sqs, queueUrl);
+
         // TODO-RS: Need to build a full queue URL prefix for this, to include
         // the account too.
         thisReference = new SerializableReference<>(queueNamePrefix, this);
@@ -52,8 +53,10 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     }
 
     protected void checkQueueForIdleness(String queueUrl) {
+        LOG.info("Checking queue for idleness: " + queueUrl);
         try {
             if (isQueueIdle(queueUrl) && SQSQueueUtils.isQueueEmpty(sqs, queueUrl)) {
+                LOG.info("Deleting idle queue: " + queueUrl);
                 sqs.deleteQueue(queueUrl);
             }
         } catch (QueueDoesNotExistException e) {

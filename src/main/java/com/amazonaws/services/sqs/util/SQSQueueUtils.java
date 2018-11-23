@@ -101,21 +101,21 @@ public class SQSQueueUtils {
         Long.parseLong(attrValues.get(attr.name())) == 0);
     }
 
-    public static boolean pollingWait(long timeout, TimeUnit unit, Supplier<Boolean> test) throws InterruptedException {
-        long remainingSeconds = TimeUnit.SECONDS.convert(timeout, unit);
+    public static boolean awaitWithPolling(long period, long timeout, TimeUnit unit, Supplier<Boolean> test) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
         while (!test.get()) {
-            if (remainingSeconds <= 0) {
+            if (deadlineNanos < System.nanoTime()) {
                 return false;
             }
-            Thread.sleep(1000);
-            remainingSeconds--;
+            // TODO-RS: Use a ScheduledExecutorService instead of sleeping?
+            unit.sleep(period);
         }
         return true;
     }
 
     public static boolean awaitEmptyQueue(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
         // There's no way to be directly notified unfortunately.
-        return pollingWait(timeout, unit, () -> isQueueEmpty(sqs, queueUrl));
+        return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> isQueueEmpty(sqs, queueUrl));
     }
 
     public static void forEachQueue(ExecutorService executor, AmazonSQS sqs, String prefix, int limit, Consumer<String> action) {

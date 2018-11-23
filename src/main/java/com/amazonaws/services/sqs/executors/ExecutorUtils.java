@@ -66,10 +66,10 @@ public class ExecutorUtils {
     }
 
     public static <T> Consumer<T> acceptOn(ExecutorService executor, Consumer<T> consumer) {
-        return x -> getOn(executor, () -> {consumer.accept(x); return null;});
+        return x -> executor.submit(SerializableRunnable.serializable(() -> consumer.accept(x)));
     }
 
     public static IntConsumer acceptIntOn(ExecutorService executor, IntConsumer consumer) {
-        return x -> getOn(executor, () -> {consumer.accept(x); return null;});
+        return x -> executor.submit(SerializableRunnable.serializable(() -> consumer.accept(x)));
     }
 }

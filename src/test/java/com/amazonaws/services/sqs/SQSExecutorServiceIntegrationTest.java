@@ -55,7 +55,6 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
-    private static List<Throwable> taskExceptions = new ArrayList<>();
 
     private static class SQSExecutorWithAssertions extends SQSExecutorService implements Serializable {
 
@@ -72,14 +71,6 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
             return thisExecutor.withScope(localScope, () -> super.deserializeTask(message));
         }
 
-        @Override
-        protected void afterExecute(Runnable r, Throwable t) {
-            if (t != null) {
-                taskExceptions.add(t);
-                t.printStackTrace();
-            }
-        }
-
         protected Object writeReplace() throws ObjectStreamException {
             return thisExecutor;
         }
@@ -94,18 +85,11 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
-        taskExceptions.clear();
     }
 
     @After
     public void teardown() throws InterruptedException {
-        boolean allShutdown = executors.parallelStream().allMatch(this::shutdownExecutor);
-        if (!taskExceptions.isEmpty()) {
-            RuntimeException toThrow = new RuntimeException("Task failure", taskExceptions.get(0));
-            taskExceptions.subList(1, taskExceptions.size()).forEach(toThrow::addSuppressed);
-            throw toThrow;
-        }
-        assertTrue(allShutdown);
+        assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
     }
 
     private boolean shutdownExecutor(SQSExecutorService executor) {
@@ -251,7 +235,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
             String queueName = prefix + i;
             expected.add(sqs.createQueue(queueName).getQueueUrl());
         }
-        SQSQueueUtils.pollingWait(1, TimeUnit.MINUTES, () -> sqs.listQueues(prefix).getQueueUrls().size() == numQueues);
+        SQSQueueUtils.awaitWithPolling(5, 70, TimeUnit.SECONDS, () -> sqs.listQueues(prefix).getQueueUrls().size() == numQueues);
         List<SQSExecutorService> executors = 
                 IntStream.range(0, 5)
                          .mapToObj(x -> createExecutor(queueUrl))
