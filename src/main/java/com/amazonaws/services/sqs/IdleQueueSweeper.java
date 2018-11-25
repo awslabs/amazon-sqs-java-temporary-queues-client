@@ -17,7 +17,6 @@ import org.apache.commons.logging.LogFactory;
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 @SuppressWarnings("squid:S2055") // SonarLint exception for the custom serialization approach.
@@ -27,8 +26,8 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     private final SerializableReference<IdleQueueSweeper> thisReference;
 
-    public IdleQueueSweeper(AmazonSQSWithResponses sqs, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
-        super(sqs, queueUrl);
+    public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
+        super(sqsRequester, sqsResponder, queueUrl);
 
         // TODO-RS: Need to build a full queue URL prefix for this, to include
         // the account too.
@@ -78,10 +77,15 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     protected Object writeReplace() throws ObjectStreamException {
         return thisReference;
     }
-
+    
     @Override
     public void shutdown() {
-        thisReference.close();
         super.shutdown();
+        try {
+            awaitTermination(20, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            LOG.warn("Timed out waiting for IdleQueueSweeper to shut down");
+        }
+        thisReference.close();
     }
 }

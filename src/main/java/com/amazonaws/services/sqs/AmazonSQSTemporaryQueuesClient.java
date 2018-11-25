@@ -15,7 +15,7 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 /**
  * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
  */
-class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
+public class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final String HOST_QUEUE_NAME_PREFIX = "__HostQueue";
 
@@ -33,11 +33,11 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         this.prefix = HOST_QUEUE_NAME_PREFIX + "_" + clientId + "_";
     }
 
-    static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs) {
+    public static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs) {
         return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs));
     }
 
-    static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs, String clientId) {
+    public static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs, String clientId) {
         return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs), clientId);
     }
 
@@ -46,13 +46,16 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         // It needs to be shared between different clients, but testing friendly!
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
+        // TODO-RS: One of these clients needs a teardown() method for deleting this
+        // queue, for testing or for permanent teardown of shared capacity. 
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName(HOST_QUEUE_NAME_PREFIX + "Sweeper")
                 // Server-side encryption is important here because we're putting
                 // queue URLs into this queue.
                 .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
         String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(new AmazonSQSResponsesClient(sqs), HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
+        AmazonSQSResponsesClient responsesClient = new AmazonSQSResponsesClient(sqs);
+        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(responsesClient, responsesClient, HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
         return new AmazonSQSVirtualQueuesClient(deleter);
     }
 
@@ -73,7 +76,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         try {
             hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
         } finally {
-            amazonSqsToBeExtended.shutdown();
+            super.shutdown();
         }
     }
 }

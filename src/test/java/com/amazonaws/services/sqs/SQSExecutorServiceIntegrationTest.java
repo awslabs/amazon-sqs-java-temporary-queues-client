@@ -2,8 +2,8 @@ package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.executors.DeduplicatedCallable.deduplicated;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
-import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
 import static com.amazonaws.services.sqs.executors.SerializableCallable.serializable;
+import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -43,14 +43,13 @@ import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class SQSExecutorServiceIntegrationTest extends TestUtils {
 
     private static AmazonSQS sqs;
-    private static AmazonSQSWithResponses sqsResponseClient;
+    private static AmazonSQSResponsesClient sqsResponseClient;
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
@@ -61,8 +60,8 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl) {
-            super(sqs, queueUrl);
+        public SQSExecutorWithAssertions(String queueUrl) {
+            super(sqsResponseClient, sqsResponseClient, queueUrl);
             thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
         }
 
@@ -89,7 +88,12 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
 
     @After
     public void teardown() throws InterruptedException {
-        assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
+        try {
+            assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
+        } finally {
+            sqs.deleteQueue(queueUrl);
+            sqsResponseClient.shutdown();
+        }
     }
 
     private boolean shutdownExecutor(SQSExecutorService executor) {
@@ -103,7 +107,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     }
 
     private SQSExecutorService createExecutor(String queueUrl) {
-        SQSExecutorService executor = new SQSExecutorWithAssertions(sqsResponseClient, queueUrl);
+        SQSExecutorService executor = new SQSExecutorWithAssertions(queueUrl);
         executors.add(executor);
         return executor;
     }
@@ -226,7 +230,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         assertEquals(expected, actual);
     }
 
-    // TODO-RS: Enable @Test
+    @Test
     public void listQueuesLimitWorkaround() throws InterruptedException {
         String prefix = "listQueuesLimitWorkaround-" + UUID.randomUUID().toString() + '-';
         int numQueues = 50;
@@ -242,8 +246,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
                          .collect(Collectors.toList());
         Function<String, List<String>> lister = (Function<String, List<String>> & Serializable)
                 (p -> sqs.listQueues(p).getQueueUrls());
-        Set<String> allQueueUrls = SQSQueueUtils.listQueuesStream(executors.get(0), lister, prefix, 50)
-                                                .collect(Collectors.toSet());
+        Set<String> allQueueUrls = new HashSet<>(SQSQueueUtils.listQueuesStream(executors.get(0), lister, prefix, 50));
         try {
             assertEquals(expected.size(), allQueueUrls.size());
             assertEquals(expected, allQueueUrls);

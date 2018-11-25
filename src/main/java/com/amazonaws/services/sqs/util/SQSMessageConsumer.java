@@ -3,6 +3,7 @@ package com.amazonaws.services.sqs.util;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.ATTRIBUTE_NAMES_ALL;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -35,14 +36,17 @@ public class SQSMessageConsumer {
     protected final Consumer<Message> consumer;
 
     protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+    protected final CountDownLatch terminated = new CountDownLatch(1);
     protected final Runnable shutdownHook;
     // TODO-RS: This is currently only defining a soft deadline for shutdown:
     // it only limits the WaitTimeSeconds parameter, but will still wait for
-    // delayed completion of inflight receives.
+    // delayed completion of inflight receives. We do want to allow those to
+    // complete so they can be put back on the queue, but isShutdown() should
+    // be true in the meantime.
     protected long deadlineNanos = -1;
 
-    // TODO: AmazonSQSAsync support, in place of our own ExecutorService
-    protected final ExecutorService executor;
+    private static final ExecutorService executor = Executors.newCachedThreadPool(
+            new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
         this(sqs, queueUrl, consumer, () -> {});
@@ -52,7 +56,6 @@ public class SQSMessageConsumer {
         this.sqs = sqs;
         this.queueUrl = queueUrl;
         this.consumer = consumer;
-        this.executor = Executors.newFixedThreadPool(1);
         this.shutdownHook = shutdownHook;
     }
 
@@ -66,52 +69,56 @@ public class SQSMessageConsumer {
     }
 
     private void poll() {
-        for (;;) {
-            if (shuttingDown.get()) {
-                break;
-            }
-
-            int waitTimeSeconds = 20;
-            if (deadlineNanos > 0) {
-                long currentNanos = System.nanoTime();
-                if (currentNanos >= deadlineNanos) {
-                    shutdown();
+        try {
+            for (;;) {
+                if (Thread.interrupted() || shuttingDown.get()) {
                     break;
-                } else {
-                    int secondsRemaining = (int)TimeUnit.NANOSECONDS.toSeconds(deadlineNanos - currentNanos);
-                    waitTimeSeconds = Math.max(0, Math.min(20, secondsRemaining));
                 }
-            }
-
-            try {
-                ReceiveMessageRequest request = new ReceiveMessageRequest()
-                        .withQueueUrl(queueUrl)
-                        .withWaitTimeSeconds(waitTimeSeconds)
-                        .withMaxNumberOfMessages(10)
-                        .withMessageAttributeNames(ATTRIBUTE_NAMES_ALL)
-                        .withAttributeNames(ATTRIBUTE_NAMES_ALL);
-                List<Message> messages = sqs.receiveMessage(request).getMessages();
-
-                messages.parallelStream().forEach(this::accept);
-            } catch (QueueDoesNotExistException e) {
-                // Ignore, it may be recreated!
-                // Slow down on the polling though, to avoid tight looping.
-                // This can be treated similar to an empty queue.
+    
+                int waitTimeSeconds = 20;
+                if (deadlineNanos > 0) {
+                    long currentNanos = System.nanoTime();
+                    if (currentNanos >= deadlineNanos) {
+                        shutdown();
+                        break;
+                    } else {
+                        int secondsRemaining = (int)TimeUnit.NANOSECONDS.toSeconds(deadlineNanos - currentNanos);
+                        waitTimeSeconds = Math.max(0, Math.min(20, secondsRemaining));
+                    }
+                }
+    
                 try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e1) {
-                    Thread.currentThread().interrupt();
-                }
-            } catch (IllegalStateException e) {
-                // TODO-RS: This is a hack
-                if ("Connection pool shut down".equals(e.getMessage())) {
-                    break;
-                } else {
+                    ReceiveMessageRequest request = new ReceiveMessageRequest()
+                            .withQueueUrl(queueUrl)
+                            .withWaitTimeSeconds(waitTimeSeconds)
+                            .withMaxNumberOfMessages(10)
+                            .withMessageAttributeNames(ATTRIBUTE_NAMES_ALL)
+                            .withAttributeNames(ATTRIBUTE_NAMES_ALL);
+                    List<Message> messages = sqs.receiveMessage(request).getMessages();
+    
+                    messages.parallelStream().forEach(this::accept);
+                } catch (QueueDoesNotExistException e) {
+                    // Ignore, it may be recreated!
+                    // Slow down on the polling though, to avoid tight looping.
+                    // This can be treated similar to an empty queue.
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e1) {
+                        Thread.currentThread().interrupt();
+                    }
+                } catch (IllegalStateException e) {
+                    // TODO-RS: This is a hack
+                    if ("Connection pool shut down".equals(e.getMessage())) {
+                        break;
+                    } else {
+                        LOG.error("Unexpected exception", e);
+                    }
+                } catch (Exception e) {
                     LOG.error("Unexpected exception", e);
                 }
-            } catch (Exception e) {
-                LOG.error("Unexpected exception", e);
             }
+        } finally {
+            terminated.countDown();
         }
     }
 
@@ -132,9 +139,9 @@ public class SQSMessageConsumer {
     }
 
     public void shutdown() {
-        shuttingDown.set(true);
-        executor.shutdown();
-        shutdownHook.run();
+        if (shuttingDown.compareAndSet(false, true)) {
+            shutdownHook.run();
+        }
     }
 
     public boolean isShutdown() {
@@ -142,6 +149,6 @@ public class SQSMessageConsumer {
     }
 
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-        return executor.awaitTermination(timeout, unit);
+        return terminated.await(timeout, unit);
     }
 }

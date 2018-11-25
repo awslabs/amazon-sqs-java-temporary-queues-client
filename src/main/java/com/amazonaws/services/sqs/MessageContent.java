@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs.responsesapi;
+package com.amazonaws.services.sqs;
 
 import java.util.Collections;
 import java.util.HashMap;

@@ -157,7 +157,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     @Override
     public void shutdown() {
         hostQueues.values().forEach(HostQueue::shutdown);
-        amazonSqsToBeExtended.shutdown();
+        super.shutdown();
     }
 
     private class HostQueue {

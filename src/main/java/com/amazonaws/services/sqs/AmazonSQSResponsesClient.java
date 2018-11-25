@@ -12,18 +12,17 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
-import com.amazonaws.services.sqs.responsesapi.MessageContent;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // TODO-RS: Configuration of queue attributes to use, or at least a policy
-public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
+public class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
 
@@ -31,15 +30,15 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
 
     private final AmazonSQS sqs;
 
-    AmazonSQSResponsesClient(AmazonSQS sqs) {
+    public AmazonSQSResponsesClient(AmazonSQS sqs) {
         this.sqs = sqs;
     }
 
-    public static AmazonSQSWithResponses make(AmazonSQS sqs) {
+    public static AmazonSQSResponsesClient make(AmazonSQS sqs) {
         return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs));
     }
 
-    public static AmazonSQSWithResponses make(AmazonSQS sqs, String clientID) {
+    public static AmazonSQSResponsesClient make(AmazonSQS sqs, String clientID) {
         return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs, clientID));
     }
 
@@ -87,10 +86,8 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
             toReturn = future.get(timeout, unit);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            AmazonClientException ce = new AmazonClientException(
-                    "Thread interrupted while waiting for execution result");
-            ce.initCause(ie);
-            throw ce;
+            throw new AmazonClientException(
+                    "Thread interrupted while waiting for execution result", ie);
         } catch (ExecutionException ee) {
             // if the cause of the execution exception is an SQS exception, extract it
             // and throw the extracted exception to the clients
@@ -101,10 +98,8 @@ public class AmazonSQSResponsesClient implements AmazonSQSWithResponses {
                 throw (AmazonClientException) cause;
             }
 
-            AmazonClientException ce = new AmazonClientException(
-                    "Caught an exception while waiting for request to complete...");
-            ce.initCause(ee);
-            throw ce;
+            throw new AmazonClientException(
+                    "Caught an exception while waiting for request to complete...", ee);
         }
 
         return toReturn;

@@ -52,7 +52,6 @@ import com.amazonaws.services.sqs.model.ReceiveMessageResult;
  * The ReceiveQueueBuffer class is responsible for dequeueing of messages from a single SQS queue.
  * <p>
  * Synchronization strategy: 
- * - Threads must hold the TaskSpawnSyncPoint object monitor to spawn a new task or modify the number of inflight tasks 
  * - Threads must hold the monitor of the "futures" list to modify the list 
  * - Threads must hold the monitor of the "finishedTasks" list to modify the list 
  * - If you need to lock both futures and finishedTasks, lock futures first and finishedTasks second
@@ -185,7 +184,7 @@ public class ReceiveQueueBuffer {
                     // slight chance that the first task could have expired between the time we
                     // pruned and the time we fufill the future
                     if (!finishedTasks.isEmpty()) {
-                        if (fufillFuture(futureIter.next())) {
+                        if (fulfillFuture(futureIter.next())) {
                             futureIter.remove();
                         } else {
                             // We couldn't produce enough messages, so break the loop and return.
@@ -205,7 +204,7 @@ public class ReceiveQueueBuffer {
      * method assumes that you are holding the finished tasks lock locks when invoking it. violate
      * this assumption at your own peril
      */
-    private boolean fufillFuture(ReceiveMessageFuture future) {
+    private boolean fulfillFuture(ReceiveMessageFuture future) {
         for (Iterator<ReceiveMessageBatchTask> iter = finishedTasks.iterator(); iter.hasNext();) {
             ReceiveMessageBatchTask task = iter.next();
             Exception exception = task.getException();

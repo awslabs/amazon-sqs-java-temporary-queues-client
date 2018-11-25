@@ -43,7 +43,6 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
@@ -84,13 +83,13 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private final IdleQueueSweeper idleQueueSweeper;
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQSWithResponses sqs, String queueNamePrefix, String rootQueueUrl) {
-        super(sqs.getAmazonSQS());
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueNamePrefix, String rootQueueUrl) {
+        super(sqsRequester.getAmazonSQS());
         if (queueNamePrefix.isEmpty()) {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
-        this.idleQueueSweeper = new IdleQueueSweeper(sqs, rootQueueUrl, queueNamePrefix,
+        this.idleQueueSweeper = new IdleQueueSweeper(sqsRequester, sqsResponder, rootQueueUrl, queueNamePrefix,
                 IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
     }
 
@@ -169,6 +168,14 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             metadata.heartbeater.cancel(true);
             metadata.buffer.shutdown();
         }
+
+        String alternateQueueUrl = alternateQueueName(queueUrl);
+        QueueMetadata alternateMetadata = queues.remove(alternateQueueUrl);
+        if (alternateMetadata != null) {
+            super.deleteQueue(alternateQueueUrl);
+            alternateMetadata.heartbeater.cancel(true);
+            alternateMetadata.buffer.shutdown();
+        }
     }
 
     private void heartbeatToQueue(String queueUrl) {
@@ -223,7 +230,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             try {
                 createQueue(new CreateQueueRequest().withQueueName(alternateQueueName(queue.name))
                         .withAttributes(queue.attributes));
-                LOG.warn("Failover queue " + alternateQueueUrl + " successfully recreated.");
+                LOG.warn("Failover queue " + alternateQueueUrl + " successfully created.");
             } catch (QueueDeletedRecentlyException e) {
                 // Ignore, will retry later
                 LOG.warn("Failover queue " + alternateQueueUrl + " was recently deleted, cannot create it yet.");

@@ -12,21 +12,19 @@ import org.junit.Test;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
-import com.amazonaws.services.sqs.responsesapi.MessageContent;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class AmazonSQSResponsesClientTest extends TestUtils {
     private static AmazonSQS sqs;
-    private static AmazonSQSWithResponses rpcClient;
+    private static AmazonSQSResponsesClient rpcClient;
 
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard()
                 .withRegion(Regions.US_WEST_2)
                 .build();
-        rpcClient = AmazonSQSResponsesClient.make(sqs, "AmazonSQSResponsesClientTest");
+        rpcClient = new AmazonSQSResponsesClient(sqs);
     }
 
     @After

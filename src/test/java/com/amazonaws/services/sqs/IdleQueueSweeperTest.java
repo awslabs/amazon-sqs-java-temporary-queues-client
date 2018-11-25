@@ -11,7 +11,6 @@ import org.junit.Test;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
@@ -20,7 +19,7 @@ public class IdleQueueSweeperTest extends TestUtils {
     private static final String PREFIX = IdleQueueSweeper.class.getSimpleName() + "Test";
     
     private static AmazonSQS sqs;
-    private static AmazonSQSWithResponses sqsWithResponses;
+    private static AmazonSQSResponsesClient sqsWithResponses;
     private static String sweepingQueueUrl;
     private static IdleQueueSweeper sweeper;
 
@@ -31,7 +30,7 @@ public class IdleQueueSweeperTest extends TestUtils {
         
         String sweepingQueueName = generateRandomQueueName(PREFIX);
         sweepingQueueUrl = sqs.createQueue(sweepingQueueName).getQueueUrl();
-        sweeper = new IdleQueueSweeper(sqsWithResponses, sweepingQueueUrl, PREFIX, 5, TimeUnit.SECONDS);
+        sweeper = new IdleQueueSweeper(sqsWithResponses, sqsWithResponses, sweepingQueueUrl, PREFIX, 5, TimeUnit.SECONDS);
     }
     
     @After

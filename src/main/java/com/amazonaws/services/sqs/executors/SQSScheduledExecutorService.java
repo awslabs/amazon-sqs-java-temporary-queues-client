@@ -11,11 +11,12 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.sqs.AmazonSQSRequester;
+import com.amazonaws.services.sqs.AmazonSQSResponder;
+import com.amazonaws.services.sqs.MessageContent;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageSystemAttributeName;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
-import com.amazonaws.services.sqs.responsesapi.MessageContent;
 
 public class SQSScheduledExecutorService extends SQSExecutorService implements ScheduledExecutorService {
 
@@ -23,8 +24,8 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
     // refreshes the deduplication timeout without any race conditions.
     private static final long MAX_SQS_DELAY_SECONDS = TimeUnit.SECONDS.convert(15, TimeUnit.MINUTES);  
 
-    public SQSScheduledExecutorService(AmazonSQSWithResponses sqs, String queueUrl) {
-        super(sqs, queueUrl);
+    public SQSScheduledExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl) {
+        super(sqsRequester, sqsResponder, queueUrl);
     }
 
     /**

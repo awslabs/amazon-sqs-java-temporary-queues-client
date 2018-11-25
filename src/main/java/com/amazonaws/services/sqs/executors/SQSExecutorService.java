@@ -27,17 +27,16 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSRequester;
+import com.amazonaws.services.sqs.AmazonSQSResponder;
+import com.amazonaws.services.sqs.MessageContent;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
-import com.amazonaws.services.sqs.responsesapi.MessageContent;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.util.BinaryUtils;
 import com.amazonaws.util.Md5Utils;
 
-// TODO-RS: Define separate Message class instead of reusing the SQS SDK's class
-// (which is really a ReceivedMessage model)?
 // TODO-RS: Factor out deduplication implementation?
 public class SQSExecutorService extends AbstractExecutorService {
 
@@ -49,7 +48,8 @@ public class SQSExecutorService extends AbstractExecutorService {
     protected final InvertibleFunction<Object, String> serializer;
 
     protected final AmazonSQS sqs;
-    protected final AmazonSQSWithResponses sqsResponseClient;
+    protected final AmazonSQSRequester sqsRequester;
+    protected final AmazonSQSResponder sqsResponder;
     protected final String queueUrl;
     private final SQSMessageConsumer messageConsumer;
 
@@ -57,13 +57,14 @@ public class SQSExecutorService extends AbstractExecutorService {
 
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl) {
-        this(sqs, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
+    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl) {
+        this(sqsRequester, sqsResponder, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
     }
 
-    public SQSExecutorService(AmazonSQSWithResponses sqs, String queueUrl, InvertibleFunction<Object, String> serializer) {
-        this.sqs = sqs.getAmazonSQS();
-        this.sqsResponseClient = sqs;
+    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, InvertibleFunction<Object, String> serializer) {
+        this.sqs = sqsRequester.getAmazonSQS();
+        this.sqsRequester = sqsRequester;
+        this.sqsResponder = sqsResponder;
         this.queueUrl = queueUrl;
         this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept);
         this.messageConsumer.start();
@@ -286,7 +287,7 @@ public class SQSExecutorService extends AbstractExecutorService {
             SendMessageRequest request = toSendMessageRequest();
 
             if (withResponse) {
-                CompletableFuture<Message> responseFuture = sqsResponseClient.sendMessageAndGetResponseAsync(
+                CompletableFuture<Message> responseFuture = sqsRequester.sendMessageAndGetResponseAsync(
                         request, MAX_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
                 responseFuture.whenComplete((result, exception) -> {
                     if (exception != null) {
@@ -351,8 +352,8 @@ public class SQSExecutorService extends AbstractExecutorService {
 
             String response = futureSerializer.apply(this);
 
-            if (sqsResponseClient.isResponseMessageRequested(messageContent)) {
-                sqsResponseClient.sendResponseMessage(messageContent, new MessageContent(response));
+            if (sqsResponder.isResponseMessageRequested(messageContent)) {
+                sqsResponder.sendResponseMessage(messageContent, new MessageContent(response));
             }
 
             if (metadata.deduplicationID.isPresent() || isCancelled()) {
@@ -365,12 +366,12 @@ public class SQSExecutorService extends AbstractExecutorService {
     @Override
     public void shutdown() {
         shuttingDown.set(true);
+        messageConsumer.shutdown();
     }
 
     @Override
     public List<Runnable> shutdownNow() {
         shutdown();
-        messageConsumer.shutdown();
         return Collections.emptyList();
     }
 

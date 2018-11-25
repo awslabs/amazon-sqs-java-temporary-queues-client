@@ -16,13 +16,12 @@ import org.junit.Test;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 
 public class SQSExecutorWithVirtualQueuesTest {
 
     private static AmazonSQS sqs;
     private static String requestQueueUrl;
-    private static AmazonSQSWithResponses rpcClient;
+    private static AmazonSQSResponsesClient rpcClient;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static List<Throwable> taskExceptions = new ArrayList<>();
 
@@ -48,7 +47,7 @@ public class SQSExecutorWithVirtualQueuesTest {
 
     @Test
     public void parallelMap() throws InterruptedException, ExecutionException, TimeoutException {
-        SQSExecutorService executor = new SQSExecutorService(rpcClient, requestQueueUrl);
+        SQSExecutorService executor = new SQSExecutorService(rpcClient, rpcClient, requestQueueUrl);
         int sum = IntStream.range(0, 10)
                            .parallel()
                            .mapToObj(applyIntOn(executor, i -> i * i))

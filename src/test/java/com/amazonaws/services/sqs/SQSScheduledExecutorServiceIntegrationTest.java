@@ -19,9 +19,12 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,26 +35,27 @@ import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
 import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
 
+    private static final Log LOG = LogFactory.getLog(SQSScheduledExecutorServiceIntegrationTest.class);
+    
     private static AmazonSQS sqs;
-    private static AmazonSQSWithResponses sqsResponseClient;
+    private static AmazonSQSResponsesClient sqsResponseClient;
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
-    private static List<Throwable> taskExceptions = new ArrayList<>();
 
     private static class SQSScheduledExecutorWithAssertions extends SQSScheduledExecutorService implements Serializable {
 
         ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSScheduledExecutorWithAssertions(AmazonSQSWithResponses sqs, String queueUrl) {
-            super(sqs, queueUrl);
+        public SQSScheduledExecutorWithAssertions( String queueUrl) {
+            super(sqsResponseClient, sqsResponseClient, queueUrl);
             thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
         }
 
@@ -74,18 +78,11 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
-        taskExceptions.clear();
     }
 
     @After
     public void teardown() throws InterruptedException {
-        boolean allShutdown = executors.parallelStream().allMatch(this::shutdownExecutor);
-        if (!taskExceptions.isEmpty()) {
-            RuntimeException toThrow = new RuntimeException("Task failure", taskExceptions.get(0));
-            taskExceptions.subList(1, taskExceptions.size()).forEach(toThrow::addSuppressed);
-            throw toThrow;
-        }
-        assertTrue(allShutdown);
+        assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
     }
 
     private boolean shutdownExecutor(SQSExecutorService executor) {
@@ -99,7 +96,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     }
 
     private SQSScheduledExecutorService createScheduledExecutor(String queueUrl) {
-        SQSScheduledExecutorService executor = new SQSScheduledExecutorWithAssertions(sqsResponseClient, queueUrl);
+        SQSScheduledExecutorService executor = new SQSScheduledExecutorWithAssertions(queueUrl);
         executors.add(executor);
         return executor;
     }
@@ -146,12 +143,14 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     }
 
     private static void slowTask() {
+        LOG.info("Starting slow task");
         try {
             Thread.sleep(2000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
         tasksCompletedLatch.countDown();
+        LOG.info("Finished slow task");
     }
 
     @Test
@@ -161,6 +160,8 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
         assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
         assertFalse(future.isDone());
+        
+        // Cancel and assert that the future behaves correctly locally...
         future.cancel(true);
         assertTrue(future.isDone());
         assertTrue(future.isCancelled());
@@ -171,6 +172,9 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         } catch (CancellationException e) {
             // Expected
         }
+        
+        // ...and that the message gets purged from the queue
+        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 5, TimeUnit.SECONDS));
     }
 
     @Test
@@ -180,6 +184,8 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
         assertTrue(tasksCompletedLatch.await(10, TimeUnit.SECONDS));
         assertFalse(future.isDone());
+        
+        // Cancel and assert that the future behaves correctly locally...
         future.cancel(true);
         assertTrue(future.isDone());
         assertTrue(future.isCancelled());
@@ -190,5 +196,8 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         } catch (CancellationException e) {
             // Expected
         }
+        
+        // ...and that the message gets purged from the queue
+        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 5, TimeUnit.SECONDS));
     }
 }

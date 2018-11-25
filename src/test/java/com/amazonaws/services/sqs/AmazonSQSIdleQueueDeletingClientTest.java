@@ -3,6 +3,7 @@ package com.amazonaws.services.sqs;
 import static org.junit.Assert.assertEquals;
 
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
@@ -15,27 +16,30 @@ import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.responsesapi.AmazonSQSWithResponses;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
 public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
 
-    private static final String PREFIX = "IdleQDeletingClientTest";
+    private static String prefix;
 
     private static AmazonSQS sqs;
-    private static AmazonSQSWithResponses sqsWithResponses;
+    private static AmazonSQSResponsesClient sqsWithResponses;
     private static String sweepingQueueUrl;
     private static AmazonSQSIdleQueueDeletingClient client;
 
     @Before
     public void setup() {
+        // UUIDs are two long for this
+        prefix = "IdleQueueDeletingClientTest" + ThreadLocalRandom.current().nextInt(1000000);
+        
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
-        sqsWithResponses = new AmazonSQSResponsesClient(sqs);
+        AmazonSQS sqs2 = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
+        sqsWithResponses = new AmazonSQSResponsesClient(sqs2);
 
-        String sweepingQueueName = generateRandomQueueName(PREFIX);
+        String sweepingQueueName = generateRandomQueueName(prefix);
         sweepingQueueUrl = sqs.createQueue(sweepingQueueName).getQueueUrl();
-        client = new AmazonSQSIdleQueueDeletingClient(sqsWithResponses, PREFIX, sweepingQueueUrl);
+        client = new AmazonSQSIdleQueueDeletingClient(sqsWithResponses, sqsWithResponses, prefix, sweepingQueueUrl);
     }
 
     @After
@@ -43,18 +47,18 @@ public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
         if (client != null) {
             client.shutdown();
         }
+        if (sweepingQueueUrl != null) {
+            sqs.deleteQueue(sweepingQueueUrl);
+        }
         if (sqsWithResponses != null) {
             sqsWithResponses.shutdown();
-        }
-        if (sqs != null) {
-            sqs.shutdown();
         }
     }
 
     @Test
     public void idleQueueIsDeleted() throws InterruptedException {
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(generateRandomQueueName(PREFIX + "_TestQueue_"))
+                .withQueueName(generateRandomQueueName(prefix))
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "1");
         String idleQueueUrl = client.createQueue(createQueueRequest).getQueueUrl();
         
@@ -73,13 +77,15 @@ public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
     @Test
     public void recreatingQueues() throws InterruptedException {
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(generateRandomQueueName(PREFIX + "_TestQueue_"))
+                .withQueueName(generateRandomQueueName(prefix))
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
         String queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
         // Use the underlying client so the wrapper has no chance to do anything first
         sqs.deleteQueue(queueUrl);
         
+        // TODO-RS: This should be continuously using the queue during both
+        // failover and recovery
         TimeUnit.MINUTES.sleep(1);
         
         String messageBody = "Whatever, I'm still sending a message!";

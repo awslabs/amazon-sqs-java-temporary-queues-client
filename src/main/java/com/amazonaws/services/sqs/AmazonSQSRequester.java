@@ -1,4 +1,4 @@
-package com.amazonaws.services.sqs.responsesapi;
+package com.amazonaws.services.sqs;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -8,7 +8,7 @@ import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
-public interface AmazonSQSWithResponses {
+public interface AmazonSQSRequester {
 
     AmazonSQS getAmazonSQS();
 
@@ -25,14 +25,6 @@ public interface AmazonSQSWithResponses {
      */
     public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request, 
             int timeout, TimeUnit unit);
-
-    public boolean isResponseMessageRequested(MessageContent requestMessage);
-
-    /**
-     * Given a message that was sent using sendMessageAndGetResponse[Async],
-     * sends the given message as its response.
-     */
-    public void sendResponseMessage(MessageContent requestMessage, MessageContent response);
 
     public void shutdown();
 }

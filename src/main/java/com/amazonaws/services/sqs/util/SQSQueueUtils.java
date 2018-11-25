@@ -3,7 +3,9 @@ package com.amazonaws.services.sqs.util;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptIntOn;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptOn;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
+import static com.amazonaws.services.sqs.executors.SerializableIntFunction.serializable;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,10 +15,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.executors.SerializableIntFunction;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
@@ -134,7 +138,7 @@ public class SQSQueueUtils {
         }
     }
 
-    public static Stream<String> listQueuesStream(ExecutorService executor, Function<String, List<String>> lister, String prefix, int limit) {
+    public static List<String> listQueuesStream(ExecutorService executor, Function<String, List<String>> lister, String prefix, int limit) {
         List<String> queueUrls = lister.apply(prefix);
         if (queueUrls.size() >= limit) {
             // Manually work around the 1000 queue limit by forking for each
@@ -143,11 +147,12 @@ public class SQSQueueUtils {
             return VALID_QUEUE_NAME_CHARACTERS
                     .chars()
                     .parallel()
-                    .mapToObj(applyIntOn(executor, c ->
-                    listQueuesStream(executor, lister, prefix + (char)c, limit)))
-                    .flatMap(Function.identity());
+                    .mapToObj(applyIntOn(executor, c -> listQueuesStream(executor, lister, prefix + (char)c, limit)))
+                    .map(List::stream)
+                    .flatMap(Function.identity())
+                    .collect(Collectors.toList());
         } else {
-            return queueUrls.stream();
+            return queueUrls;
         }
     }
 
