@@ -60,7 +60,7 @@ public class ReceiveQueueBuffer {
 
     private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
 
-    private static final Queue<Message> EMPTY_DEQUE = new ArrayDeque<Message>();
+    private static final Queue<Message> EMPTY_DEQUE = new ArrayDeque<>();
 
     private final ScheduledExecutorService waitTimer = Executors.newSingleThreadScheduledExecutor();
 

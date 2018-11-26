@@ -38,10 +38,6 @@ public class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSRe
         return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs));
     }
 
-    public static AmazonSQSResponsesClient make(AmazonSQS sqs, String clientID) {
-        return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs, clientID));
-    }
-
     @Override
     public AmazonSQS getAmazonSQS() {
         return sqs;

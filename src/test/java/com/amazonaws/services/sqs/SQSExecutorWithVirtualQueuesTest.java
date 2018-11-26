@@ -33,7 +33,7 @@ public class SQSExecutorWithVirtualQueuesTest {
                 .build();
         // TODO-RS: Should be temporary queues in tests!
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-        rpcClient = AmazonSQSResponsesClient.make(sqs, "SQSExecutorWithVirtualQueuesTest");
+        rpcClient = AmazonSQSResponsesClient.make(sqs);
         executors.clear();
         taskExceptions.clear();
     }

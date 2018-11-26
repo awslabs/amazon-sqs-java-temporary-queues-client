@@ -55,7 +55,7 @@ public class IdleQueueSweeperTest extends TestUtils {
                 .withQueueName(generateRandomQueueName(PREFIX + "_TestQueue_"));
         String idleQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
         sqs.tagQueue(idleQueueUrl, Collections.singletonMap(
-                AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "1"));
+                AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG, "1"));
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         boolean deleted = SQSQueueUtils.awaitWithPolling(2, 70, TimeUnit.SECONDS, () -> {

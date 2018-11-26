@@ -24,21 +24,14 @@ public class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapp
     private final String prefix;
 
     AmazonSQSTemporaryQueuesClient(AmazonSQS sqs) {
-        // TODO-RS: Be smarter about this: include host name, etc.
-        this(sqs, UUID.randomUUID().toString());
-    }
-
-    AmazonSQSTemporaryQueuesClient(AmazonSQS sqs, String clientId) {
         super(sqs);
+        // TODO-RS: Be smarter about this: include host name, etc.
+        String clientId = UUID.randomUUID().toString();
         this.prefix = HOST_QUEUE_NAME_PREFIX + "_" + clientId + "_";
     }
 
     public static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs) {
         return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs));
-    }
-
-    public static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs, String clientId) {
-        return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs), clientId);
     }
 
     private static AmazonSQS makeWrappedClient(AmazonSQS sqs) {

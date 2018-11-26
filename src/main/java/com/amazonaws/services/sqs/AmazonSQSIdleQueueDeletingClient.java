@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -51,14 +52,17 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
 
-    // Publicly visible constant
+    // Publicly visible constants
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
-
+    public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
+    public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = TimeUnit.MINUTES.toSeconds(5);
+    
+    static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
     private static final long IDLE_QUEUE_SWEEPER_PASS_SECONDS = 10;
 
-    static final String LAST_HEARTBEAT_TIMESTAMP = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
+    static final String LAST_HEARTBEAT_TIMESTAMP_TAG = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
 
     private class QueueMetadata {
         private final String name;
@@ -95,12 +99,12 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
-        if (!request.getAttributes().containsKey(IDLE_QUEUE_RETENTION_PERIOD)) {
+        Map<String, String> attributes = new HashMap<>(request.getAttributes());
+        Optional<Long> retentionPeriod = getRetentionPeriod(attributes);
+        if (!retentionPeriod.isPresent()) {
             return super.createQueue(request);
         }
 
-        Map<String, String> attributes = new HashMap<>(request.getAttributes());
-        String retentionPeriod = attributes.remove(IDLE_QUEUE_RETENTION_PERIOD);
         String queueName = request.getQueueName();
         if (!queueName.startsWith(queueNamePrefix)) {
             throw new IllegalArgumentException();
@@ -114,7 +118,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String queueUrl = result.getQueueUrl();
 
         amazonSqsToBeExtended.tagQueue(queueUrl,
-                Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriod));
+                Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriod.get().toString()));
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
         Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl,
@@ -131,6 +135,22 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         return result;
     }
 
+    static Optional<Long> getRetentionPeriod(Map<String, String> queueAttributes) {
+        return Optional.ofNullable(queueAttributes.remove(IDLE_QUEUE_RETENTION_PERIOD))
+                       .map(Long::parseLong)
+                       .map(AmazonSQSIdleQueueDeletingClient::checkQueueRetentionPeriodBounds);
+    }
+    
+    static long checkQueueRetentionPeriodBounds(long retentionPeriod) {
+        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS ||
+                retentionPeriod > MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
+            throw new IllegalArgumentException("The " + IDLE_QUEUE_RETENTION_PERIOD + 
+                    " attribute must be between " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS +
+                    " and " + MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
+        }
+        return retentionPeriod;
+    }
+    
     @Override
     public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
         QueueMetadata metadata = queues.get(request.getQueueUrl());
@@ -183,7 +203,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         long currentTimestamp = System.currentTimeMillis();
         try {
             amazonSqsToBeExtended.tagQueue(queueUrl, 
-                    Collections.singletonMap(LAST_HEARTBEAT_TIMESTAMP, String.valueOf(currentTimestamp)));
+                    Collections.singletonMap(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp)));
         } catch (QueueDoesNotExistException e) {
             recreateQueue(queueUrl);
             // TODO-RS: Retry right away

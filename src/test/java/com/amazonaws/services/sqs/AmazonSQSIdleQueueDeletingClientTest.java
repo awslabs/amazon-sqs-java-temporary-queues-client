@@ -30,7 +30,7 @@ public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
 
     @Before
     public void setup() {
-        // UUIDs are two long for this
+        // UUIDs are too long for this
         prefix = "IdleQueueDeletingClientTest" + ThreadLocalRandom.current().nextInt(1000000);
         
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();

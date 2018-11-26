@@ -65,8 +65,8 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     private boolean isQueueIdle(String queueUrl) {
         Map<String, String> queueTags = sqs.listQueueTags(queueUrl).getTags();
-        Long lastHeartbeat = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP);
-        Long idleQueueRetentionPeriod = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD);
+        Long lastHeartbeat = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG);
+        Long idleQueueRetentionPeriod = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG);
         long currentTimestamp = System.currentTimeMillis();
 
         return idleQueueRetentionPeriod != null && 
