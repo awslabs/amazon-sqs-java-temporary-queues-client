@@ -97,12 +97,12 @@ public class SQSQueueUtils {
         };
 
         GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest()
-        .withQueueUrl(queueUrl)
-        .withAttributeNames(messageCountAttrs);
+                .withQueueUrl(queueUrl)
+                .withAttributeNames(messageCountAttrs);
         GetQueueAttributesResult result = sqs.getQueueAttributes(getQueueAttributesRequest);
         Map<String, String> attrValues = result.getAttributes();
         return Stream.of(messageCountAttrs).allMatch(attr ->
-        Long.parseLong(attrValues.get(attr.name())) == 0);
+                Long.parseLong(attrValues.get(attr.name())) == 0);
     }
 
     public static boolean awaitWithPolling(long period, long timeout, TimeUnit unit, Supplier<Boolean> test) throws InterruptedException {

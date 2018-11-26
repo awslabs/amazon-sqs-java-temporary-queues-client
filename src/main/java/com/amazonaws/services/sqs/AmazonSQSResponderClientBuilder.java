@@ -12,6 +12,17 @@ public class AmazonSQSResponderClientBuilder extends AwsSyncClientBuilder<Amazon
         super(CLIENT_CONFIG_FACTORY);
     }
 
+    /**
+     * @return Create new instance of builder with all defaults set.
+     */
+    public static AmazonSQSResponderClientBuilder standard() {
+        return new AmazonSQSResponderClientBuilder();
+    }
+    
+    public static AmazonSQSResponder defaultClient() {
+        return standard().build();
+    }
+    
     public static AmazonSQSResponder build(AmazonSQS sqs) {
         return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs));
     }

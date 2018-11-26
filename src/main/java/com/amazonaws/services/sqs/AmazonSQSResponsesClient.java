@@ -22,7 +22,7 @@ import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 // TODO-RS: Configuration of queue attributes to use, or at least a policy
-public class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder {
+class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
 

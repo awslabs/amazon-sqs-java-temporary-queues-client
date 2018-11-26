@@ -15,7 +15,7 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 /**
  * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
  */
-public class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
+class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final String HOST_QUEUE_NAME_PREFIX = "__HostQueue";
 
