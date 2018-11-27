@@ -14,7 +14,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class IdleQueueSweeperTest extends TestUtils {
+public class IdleQueueSweeperIT extends TestUtils {
 
     private static final String PREFIX = IdleQueueSweeper.class.getSimpleName() + "Test";
     

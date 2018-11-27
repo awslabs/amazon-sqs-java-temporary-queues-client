@@ -37,9 +37,9 @@ import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
+public class SQSScheduledExecutorServiceIT extends TestUtils {
 
-    private static final Log LOG = LogFactory.getLog(SQSScheduledExecutorServiceIntegrationTest.class);
+    private static final Log LOG = LogFactory.getLog(SQSScheduledExecutorServiceIT.class);
     
     private static AmazonSQS sqs;
     private static AmazonSQSRequester requester;
@@ -72,7 +72,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
-        requester = new AmazonSQSRequesterClient(sqs, SQSScheduledExecutorServiceIntegrationTest.class.getSimpleName());
+        requester = new AmazonSQSRequesterClient(sqs, SQSScheduledExecutorServiceIT.class.getSimpleName());
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
@@ -160,7 +160,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     public void scheduleAtFixedRate() throws InterruptedException, ExecutionException {
         tasksCompletedLatch = new CountDownLatch(3);
         SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
+        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIT::slowTask), 1, 1, TimeUnit.SECONDS);
         assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
         assertFalse(future.isDone());
         
@@ -184,7 +184,7 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     public void scheduleWithFixedDelay() throws InterruptedException, ExecutionException {
         tasksCompletedLatch = new CountDownLatch(3);
         SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIntegrationTest::slowTask), 1, 1, TimeUnit.SECONDS);
+        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIT::slowTask), 1, 1, TimeUnit.SECONDS);
         assertTrue(tasksCompletedLatch.await(10, TimeUnit.SECONDS));
         assertFalse(future.isDone());
         

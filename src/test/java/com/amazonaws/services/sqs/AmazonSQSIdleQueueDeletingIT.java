@@ -19,7 +19,7 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class AmazonSQSIdleQueueDeletingClientTest extends TestUtils {
+public class AmazonSQSIdleQueueDeletingIT extends TestUtils {
 
     private static String prefix;
 

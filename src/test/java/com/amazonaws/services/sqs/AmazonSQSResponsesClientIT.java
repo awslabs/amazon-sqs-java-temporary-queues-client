@@ -15,7 +15,7 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class AmazonSQSResponsesClientTest extends TestUtils {
+public class AmazonSQSResponsesClientIT extends TestUtils {
     private static AmazonSQS sqs;
     private static AmazonSQSRequester sqsRequester;
     private static AmazonSQSResponder sqsResponder;
@@ -25,7 +25,7 @@ public class AmazonSQSResponsesClientTest extends TestUtils {
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
-        sqsRequester = new AmazonSQSRequesterClient(sqs, AmazonSQSResponsesClientTest.class.getSimpleName());
+        sqsRequester = new AmazonSQSRequesterClient(sqs, AmazonSQSResponsesClientIT.class.getSimpleName());
         sqsResponder = new AmazonSQSResponderClient(sqs);
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }

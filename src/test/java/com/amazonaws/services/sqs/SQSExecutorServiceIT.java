@@ -46,7 +46,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class SQSExecutorServiceIntegrationTest extends TestUtils {
+public class SQSExecutorServiceIT extends TestUtils {
 
     private static AmazonSQS sqs;
     private static AmazonSQSRequester requester;
@@ -81,7 +81,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         sqs = AmazonSQSClientBuilder.standard()
                 .withRegion(Regions.US_WEST_2)
                 .build();
-        requester = new AmazonSQSRequesterClient(sqs, SQSExecutorServiceIntegrationTest.class.getSimpleName());
+        requester = new AmazonSQSRequesterClient(sqs, SQSExecutorServiceIT.class.getSimpleName());
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);

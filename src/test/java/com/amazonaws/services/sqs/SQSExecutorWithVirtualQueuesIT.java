@@ -17,7 +17,7 @@ import org.junit.Test;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.executors.SQSExecutorService;
 
-public class SQSExecutorWithVirtualQueuesTest {
+public class SQSExecutorWithVirtualQueuesIT {
 
     private static String requestQueueUrl;
     private static AmazonSQS sqs;

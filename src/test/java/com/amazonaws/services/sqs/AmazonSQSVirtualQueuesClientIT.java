@@ -15,7 +15,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.util.TestUtils;
 
-public class AmazonSQSVirtualQueuesClientTest extends TestUtils {
+public class AmazonSQSVirtualQueuesClientIT extends TestUtils {
     
     private static AmazonSQS sqs;
     private static String hostQueueUrl;

@@ -81,6 +81,11 @@ public class ReceiveQueueBuffer {
     /** shutdown buffer does not retrieve any more messages from sqs */
     volatile boolean shutDown = false;
 
+    // TODO-RS: We could use a SynchronousQueue to manange handing messages
+    // from sources to futures, which would simplify a lot of logic here.
+    // We just have to be willing to create threads to block on Queue#poll
+    // and Queue#offer.
+    
     /** message delivery futures we gave out */
     private final Set<ReceiveMessageFuture> futures = new LinkedHashSet<>();
 
