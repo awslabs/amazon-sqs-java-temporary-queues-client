@@ -87,13 +87,28 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private final IdleQueueSweeper idleQueueSweeper;
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueNamePrefix, String rootQueueUrl) {
-        super(sqsRequester.getAmazonSQS());
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
+        super(sqs);
+        
         if (queueNamePrefix.isEmpty()) {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
-        this.idleQueueSweeper = new IdleQueueSweeper(sqsRequester, sqsResponder, rootQueueUrl, queueNamePrefix,
+        
+        // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
+        // into other configuration as well.
+        // TODO-RS: One of these clients needs a teardown() method for deleting this
+        // queue, for testing or for permanent teardown of shared capacity. 
+        CreateQueueRequest request = new CreateQueueRequest()
+                .withQueueName(queueNamePrefix)
+                // Server-side encryption is important here because we're putting
+                // queue URLs into this queue.
+                .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
+        String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
+        
+        AmazonSQSRequester requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
+        AmazonSQSResponder responder = new AmazonSQSResponderClient(sqs);
+        this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
                 IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
     }
 
@@ -395,5 +410,10 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
         queues.values().forEach(metadata -> metadata.buffer.shutdown());
         super.shutdown();
+    }
+    
+    public void teardown() {
+        shutdown();
+        amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
     }
 }

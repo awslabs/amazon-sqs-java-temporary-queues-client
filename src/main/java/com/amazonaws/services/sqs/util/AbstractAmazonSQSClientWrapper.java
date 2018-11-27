@@ -177,7 +177,6 @@ public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
 
     @Override
     public void shutdown() {
-        amazonSqsToBeExtended.shutdown();
     }
 
     @Override

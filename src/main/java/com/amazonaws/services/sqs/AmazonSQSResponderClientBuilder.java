@@ -1,17 +1,46 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.ClientConfigurationFactory;
-import com.amazonaws.client.AwsSyncClientParams;
-import com.amazonaws.client.builder.AwsSyncClientBuilder;
+import java.util.Optional;
 
-public class AmazonSQSResponderClientBuilder extends AwsSyncClientBuilder<AmazonSQSResponderClientBuilder, AmazonSQSResponder> {
+public class AmazonSQSResponderClientBuilder {
 
-    private static final ClientConfigurationFactory CLIENT_CONFIG_FACTORY = new com.amazonaws.services.sqs.AmazonSQSClientConfigurationFactory();
-
+    private Optional<AmazonSQS> customSQS = Optional.empty();
+    
+    private String internalQueuePrefix = "__RequesterClientQueues__";
+    
     private AmazonSQSResponderClientBuilder() {
-        super(CLIENT_CONFIG_FACTORY);
+    }
+    
+    public static AmazonSQSResponder defaultClient() {
+        return standard().build();
+    }
+    
+    public Optional<AmazonSQS> getAmazonSQS() {
+        return customSQS;
+    }
+    
+    public void setAmazonSQS(AmazonSQS sqs) {
+        this.customSQS = Optional.of(sqs);
+    }
+    
+    public AmazonSQSResponderClientBuilder withAmazonSQS(AmazonSQS sqs) {
+        setAmazonSQS(sqs);
+        return this;
     }
 
+    public String getInternalQueuePrefix() {
+        return internalQueuePrefix;
+    }
+    
+    public void setInternalQueuePrefix(String internalQueuePrefix) {
+        this.internalQueuePrefix = internalQueuePrefix;
+    }
+    
+    public AmazonSQSResponderClientBuilder withInternalQueuePrefix(String internalQueuePrefix) {
+        setInternalQueuePrefix(internalQueuePrefix);
+        return this;
+    }
+    
     /**
      * @return Create new instance of builder with all defaults set.
      */
@@ -19,16 +48,10 @@ public class AmazonSQSResponderClientBuilder extends AwsSyncClientBuilder<Amazon
         return new AmazonSQSResponderClientBuilder();
     }
     
-    public static AmazonSQSResponder defaultClient() {
-        return standard().build();
-    }
-    
-    public static AmazonSQSResponder build(AmazonSQS sqs) {
-        return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs));
-    }
-
-    @Override
-    protected AmazonSQSResponder build(AwsSyncClientParams clientParams) {
-        return build(AmazonSQSClientBuilder.standard().build(clientParams));
+    public AmazonSQSResponder build() {
+        AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
+        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix);
+        AmazonSQS virtualQueuesClient = new AmazonSQSVirtualQueuesClient(deleter);
+        return new AmazonSQSResponderClient(virtualQueuesClient);
     }
 }

@@ -19,18 +19,18 @@ public class IdleQueueSweeperTest extends TestUtils {
     private static final String PREFIX = IdleQueueSweeper.class.getSimpleName() + "Test";
     
     private static AmazonSQS sqs;
-    private static AmazonSQSResponsesClient sqsWithResponses;
+    private static AmazonSQSRequester requester;
+    private static AmazonSQSResponder responder;
     private static String sweepingQueueUrl;
     private static IdleQueueSweeper sweeper;
 
     @Before
     public void setup() {
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
-        sqsWithResponses = new AmazonSQSResponsesClient(sqs);
-        
-        String sweepingQueueName = generateRandomQueueName(PREFIX);
-        sweepingQueueUrl = sqs.createQueue(sweepingQueueName).getQueueUrl();
-        sweeper = new IdleQueueSweeper(sqsWithResponses, sqsWithResponses, sweepingQueueUrl, PREFIX, 5, TimeUnit.SECONDS);
+        requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).build();
+        responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
+        sweepingQueueUrl = sqs.createQueue(PREFIX).getQueueUrl();
+        sweeper = new IdleQueueSweeper(requester, responder, PREFIX, PREFIX, 5, TimeUnit.SECONDS);
     }
     
     @After
@@ -41,8 +41,11 @@ public class IdleQueueSweeperTest extends TestUtils {
         if (sweepingQueueUrl != null) {
             sqs.deleteQueue(sweepingQueueUrl);
         }
-        if (sqsWithResponses != null) {
-            sqsWithResponses.shutdown();
+        if (responder != null) {
+            responder.shutdown();
+        }
+        if (requester != null) {
+            requester.shutdown();
         }
         if (sqs != null) {
             sqs.shutdown();

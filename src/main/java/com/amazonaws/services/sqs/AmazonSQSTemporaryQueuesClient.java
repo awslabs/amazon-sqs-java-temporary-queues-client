@@ -18,37 +18,18 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final String HOST_QUEUE_NAME_PREFIX = "__HostQueue";
-
+    
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
 
     private final String prefix;
 
-    AmazonSQSTemporaryQueuesClient(AmazonSQS sqs) {
+    AmazonSQSTemporaryQueuesClient(AmazonSQS sqs, String queueNamePrefix) {
         super(sqs);
-        // TODO-RS: Be smarter about this: include host name, etc.
-        String clientId = UUID.randomUUID().toString();
-        this.prefix = HOST_QUEUE_NAME_PREFIX + "_" + clientId + "_";
+        this.prefix = queueNamePrefix;
     }
 
-    public static AmazonSQSTemporaryQueuesClient make(AmazonSQS sqs) {
-        return new AmazonSQSTemporaryQueuesClient(makeWrappedClient(sqs));
-    }
-
-    private static AmazonSQS makeWrappedClient(AmazonSQS sqs) {
-        // TODO-RS: Determine the right strategy for naming the sweeping queue.
-        // It needs to be shared between different clients, but testing friendly!
-        // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
-        // into other configuration as well.
-        // TODO-RS: One of these clients needs a teardown() method for deleting this
-        // queue, for testing or for permanent teardown of shared capacity. 
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName(HOST_QUEUE_NAME_PREFIX + "Sweeper")
-                // Server-side encryption is important here because we're putting
-                // queue URLs into this queue.
-                .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
-        AmazonSQSResponsesClient responsesClient = new AmazonSQSResponsesClient(sqs);
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(responsesClient, responsesClient, HOST_QUEUE_NAME_PREFIX, sweepingQueueUrl);
+    public static AmazonSQS makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
+        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, HOST_QUEUE_NAME_PREFIX);
         return new AmazonSQSVirtualQueuesClient(deleter);
     }
 

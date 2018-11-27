@@ -19,35 +19,33 @@ import com.amazonaws.services.sqs.executors.SQSExecutorService;
 
 public class SQSExecutorWithVirtualQueuesTest {
 
-    private static AmazonSQS sqs;
     private static String requestQueueUrl;
-    private static AmazonSQSResponsesClient rpcClient;
+    private static AmazonSQS sqs;
+    private static AmazonSQSRequester requester;
+    private static AmazonSQSResponder responder;
     private static List<SQSExecutorService> executors = new ArrayList<>();
-    private static List<Throwable> taskExceptions = new ArrayList<>();
 
     @Before
     public void setup() {
-
-        sqs = AmazonSQSClientBuilder.standard()
-                .withRegion(Regions.US_WEST_2)
-                .build();
+        sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
+        requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).build();
+        responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
         // TODO-RS: Should be temporary queues in tests!
-        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-        rpcClient = AmazonSQSResponsesClient.make(sqs);
+        requestQueueUrl = requester.getAmazonSQS().createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
         executors.clear();
-        taskExceptions.clear();
     }
 
     @After
     public void teardown() throws InterruptedException {
-        if (rpcClient != null) {
-            rpcClient.shutdown();
-        }
+        requester.getAmazonSQS().deleteQueue(requestQueueUrl);
+        responder.shutdown();
+        requester.shutdown();
+        sqs.shutdown();
     }
 
     @Test
     public void parallelMap() throws InterruptedException, ExecutionException, TimeoutException {
-        SQSExecutorService executor = new SQSExecutorService(rpcClient, rpcClient, requestQueueUrl);
+        SQSExecutorService executor = new SQSExecutorService(requester, responder, requestQueueUrl);
         int sum = IntStream.range(0, 10)
                            .parallel()
                            .mapToObj(applyIntOn(executor, i -> i * i))

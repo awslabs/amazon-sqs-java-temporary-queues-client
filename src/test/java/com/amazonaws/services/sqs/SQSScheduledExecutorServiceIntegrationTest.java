@@ -19,7 +19,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,7 +42,8 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     private static final Log LOG = LogFactory.getLog(SQSScheduledExecutorServiceIntegrationTest.class);
     
     private static AmazonSQS sqs;
-    private static AmazonSQSResponsesClient sqsResponseClient;
+    private static AmazonSQSRequester requester;
+    private static AmazonSQSResponder responder;
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
@@ -54,8 +54,8 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSScheduledExecutorWithAssertions( String queueUrl) {
-            super(sqsResponseClient, sqsResponseClient, queueUrl);
+        public SQSScheduledExecutorWithAssertions(String queueUrl) {
+            super(requester, responder, queueUrl);
             thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
         }
 
@@ -71,10 +71,9 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
 
     @Before
     public void setup() {
-        sqs = AmazonSQSClientBuilder.standard()
-                .withRegion(Regions.US_WEST_2)
-                .build();
-        sqsResponseClient = new AmazonSQSResponsesClient(sqs);
+        sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
+        requester = new AmazonSQSRequesterClient(sqs, SQSScheduledExecutorServiceIntegrationTest.class.getSimpleName());
+        responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
@@ -83,6 +82,10 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
     @After
     public void teardown() throws InterruptedException {
         assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
+        sqs.deleteQueue(queueUrl);
+        responder.shutdown();
+        requester.shutdown();
+        sqs.shutdown();
     }
 
     private boolean shutdownExecutor(SQSExecutorService executor) {
@@ -198,6 +201,6 @@ public class SQSScheduledExecutorServiceIntegrationTest extends TestUtils {
         }
         
         // ...and that the message gets purged from the queue
-        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 5, TimeUnit.SECONDS));
+        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 10, TimeUnit.SECONDS));
     }
 }

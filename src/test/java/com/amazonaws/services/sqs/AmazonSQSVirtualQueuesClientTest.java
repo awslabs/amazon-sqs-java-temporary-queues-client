@@ -26,7 +26,6 @@ public class AmazonSQSVirtualQueuesClientTest extends TestUtils {
         sqs = AmazonSQSClientBuilder.standard().withRegion(Regions.US_WEST_2).build();
         client = new AmazonSQSVirtualQueuesClient(sqs);
         hostQueueUrl = client.createQueue(generateRandomQueueName()).getQueueUrl();
-
     }
 
     @After

@@ -7,6 +7,8 @@ import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -16,6 +18,7 @@ import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.sqs.executors.SQSScheduledExecutorService;
 import com.amazonaws.services.sqs.executors.SerializableReference;
+import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
@@ -23,15 +26,14 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializable {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
-
+    
+    private final ConcurrentMap<String, Object> localScope = new ConcurrentHashMap<>();
     private final SerializableReference<IdleQueueSweeper> thisReference;
 
     public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
         super(sqsRequester, sqsResponder, queueUrl);
 
-        // TODO-RS: Need to build a full queue URL prefix for this, to include
-        // the account too.
-        thisReference = new SerializableReference<>(queueNamePrefix, this);
+        thisReference = new SerializableReference<>(queueUrl, this, localScope);
 
         // Jitter the startup times to avoid throttling on tagging as much as possible.
         long initialDelay = ThreadLocalRandom.current().nextLong(period);
@@ -73,7 +75,12 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
                 (lastHeartbeat == null || 
                 (currentTimestamp - lastHeartbeat) > idleQueueRetentionPeriod * 1000);
     }
-
+    
+    @Override
+    protected SQSFutureTask<?> deserializeTask(Message message) {
+        return thisReference.withScope(localScope, () -> super.deserializeTask(message));
+    }
+    
     protected Object writeReplace() throws ObjectStreamException {
         return thisReference;
     }

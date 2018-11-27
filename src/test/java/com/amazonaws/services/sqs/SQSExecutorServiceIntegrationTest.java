@@ -49,7 +49,8 @@ import com.amazonaws.services.sqs.util.TestUtils;
 public class SQSExecutorServiceIntegrationTest extends TestUtils {
 
     private static AmazonSQS sqs;
-    private static AmazonSQSResponsesClient sqsResponseClient;
+    private static AmazonSQSRequester requester;
+    private static AmazonSQSResponder responder;
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
@@ -61,7 +62,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         SerializableReference<SQSExecutorService> thisExecutor;
 
         public SQSExecutorWithAssertions(String queueUrl) {
-            super(sqsResponseClient, sqsResponseClient, queueUrl);
+            super(requester, responder, queueUrl);
             thisExecutor = new SerializableReference<>(queueUrl, this, localScope);
         }
 
@@ -80,7 +81,8 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
         sqs = AmazonSQSClientBuilder.standard()
                 .withRegion(Regions.US_WEST_2)
                 .build();
-        sqsResponseClient = new AmazonSQSResponsesClient(sqs);
+        requester = new AmazonSQSRequesterClient(sqs, SQSExecutorServiceIntegrationTest.class.getSimpleName());
+        responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(generateRandomQueueName()).getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
@@ -92,7 +94,9 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
             assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
         } finally {
             sqs.deleteQueue(queueUrl);
-            sqsResponseClient.shutdown();
+            requester.shutdown();
+            responder.shutdown();
+            sqs.shutdown();
         }
     }
 
@@ -194,6 +198,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
 
     @Test
     public void taskThatSpawnsTasksLocal() throws InterruptedException {
+        // Sanity test using a local executor service
         tasksCompletedLatch = new CountDownLatch(20);
         ExecutorService executor = Executors.newFixedThreadPool(1);
         executor.execute(() -> seed(executor));
@@ -210,7 +215,8 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     }
 
     @Test
-    public void parallelStreamTest() {
+    public void parallelMapLocal() {
+        // Sanity test using a local executor service
         Set<Integer> actual = IntStream.range(0, 10)
                                        .parallel()
                                        .map(i -> i * i)
@@ -221,7 +227,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
     }
 
     @Test
-    public void parallelMapTest() {
+    public void parallelMap() {
         ExecutorService executor = Executors.newFixedThreadPool(1);
         Set<Integer> actual = IntStream.range(0, 10)
                                        .mapToObj(applyIntOn(executor, i -> i * i))
@@ -246,7 +252,7 @@ public class SQSExecutorServiceIntegrationTest extends TestUtils {
                          .collect(Collectors.toList());
         Function<String, List<String>> lister = (Function<String, List<String>> & Serializable)
                 (p -> sqs.listQueues(p).getQueueUrls());
-        Set<String> allQueueUrls = new HashSet<>(SQSQueueUtils.listQueuesStream(executors.get(0), lister, prefix, 50));
+        Set<String> allQueueUrls = new HashSet<>(SQSQueueUtils.listQueues(executors.get(0), lister, prefix, 50));
         try {
             assertEquals(expected.size(), allQueueUrls.size());
             assertEquals(expected, allQueueUrls);

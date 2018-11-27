@@ -1,6 +1,8 @@
 package com.amazonaws.services.sqs;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -8,36 +10,44 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-// TODO-RS: Configuration of queue attributes to use, or at least a policy
-class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder {
-
-    private static final Log LOG = LogFactory.getLog(AmazonSQSResponsesClient.class);
+/**
+ * Implementation of the request/response interfaces that creates a single
+ * temporary queue for each response message.
+ */
+class AmazonSQSRequesterClient implements AmazonSQSRequester {
 
     public static final String RESPONSE_QUEUE_URL_ATTRIBUTE_NAME = "ResponseQueueUrl";
 
     private final AmazonSQS sqs;
+    private final String queuePrefix;
+    private final Map<String, String> queueAttributes;
 
-    public AmazonSQSResponsesClient(AmazonSQS sqs) {
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix) {
+        this(sqs, queuePrefix, Collections.emptyMap());
+    }
+
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
         this.sqs = sqs;
+        this.queuePrefix = queuePrefix;
+        this.queueAttributes = new HashMap<>(queueAttributes);
     }
 
-    public static AmazonSQSResponsesClient make(AmazonSQS sqs) {
-        return new AmazonSQSResponsesClient(AmazonSQSTemporaryQueuesClient.make(sqs));
+    public AmazonSQSRequesterClient make(AmazonSQS sqs, String queuePrefix) {
+        return new AmazonSQSRequesterClient(sqs, queuePrefix);
     }
-
+    
+    public AmazonSQSRequesterClient make(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
+        return new AmazonSQSRequesterClient(sqs, queuePrefix, queueAttributes);
+    }
+    
     @Override
     public AmazonSQS getAmazonSQS() {
         return sqs;
@@ -50,11 +60,16 @@ class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder
 
     @Override
     public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request, int timeout, TimeUnit unit) {
-        String responseQueueUrl = sqs.createQueue(new CreateQueueRequest().withQueueName(UUID.randomUUID().toString())).getQueueUrl();
+        String queueName = queuePrefix + UUID.randomUUID().toString();
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
+                .withQueueName(queueName)
+                .withAttributes(queueAttributes);
+        String responseQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest requestWithResponseUrl = SQSQueueUtils.copyWithExtraAttributes(request,
                 Collections.singletonMap(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME, 
                         new MessageAttributeValue().withDataType("String").withStringValue(responseQueueUrl)));
+        // TODO-RS: Should be using sendMessageAsync
         sqs.sendMessage(requestWithResponseUrl);
 
         CompletableFuture<Message> future = new CompletableFuture<>();
@@ -102,35 +117,6 @@ class AmazonSQSResponsesClient implements AmazonSQSRequester, AmazonSQSResponder
     }
 
     @Override
-    public void sendResponseMessage(MessageContent request, MessageContent response) {
-        MessageAttributeValue attribute = request.getMessageAttributes().get(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
-
-        if (attribute != null) {
-            String replyQueueUrl = attribute.getStringValue();
-            try {
-                SendMessageRequest responseRequest = new SendMessageRequest()
-                        .withMessageBody(response.getMessageBody())
-                        .withMessageAttributes(response.getMessageAttributes())
-                        .withQueueUrl(replyQueueUrl);
-                sqs.sendMessage(responseRequest);
-            } catch (QueueDoesNotExistException e) {
-                // Stale request, ignore
-                // TODO-RS: CW metric
-                LOG.warn("Ignoring response to deleted response queue: " + replyQueueUrl);
-            }
-        } else {
-            // TODO-RS: CW metric
-            LOG.warn("Attempted to send response when none was requested");
-        }
-    }
-
-    @Override
-    public boolean isResponseMessageRequested(MessageContent requestMessage) {
-        return requestMessage.getMessageAttributes().containsKey(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
-    }
-
-    @Override
     public void shutdown() {
-        sqs.shutdown();
     }
 }

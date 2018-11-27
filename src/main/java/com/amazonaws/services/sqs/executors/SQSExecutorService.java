@@ -71,6 +71,10 @@ public class SQSExecutorService extends AbstractExecutorService {
         this.serializer = serializer;
     }
 
+    public String getQueueUrl() {
+        return queueUrl;
+    }
+    
     @Override
     public void execute(Runnable runnable) {
         if (isShutdown()) {
@@ -365,8 +369,8 @@ public class SQSExecutorService extends AbstractExecutorService {
 
     @Override
     public void shutdown() {
-        shuttingDown.set(true);
         messageConsumer.shutdown();
+        shuttingDown.set(true);
     }
 
     @Override
