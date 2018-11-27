@@ -15,8 +15,8 @@ An Amazon SQS client that supports creating lightweight, automatically-deleted t
     <version>0.9.0</version>
     <type>jar</type>
   </dependency>
-* **Samples** -- Sample code using this library is available [here](https://github.com/aws-samples/amazon-sqs-java-temporary-queues-client-samples)
 ```
+* **Samples** -- Sample code using this library is available [here](https://github.com/aws-samples/amazon-sqs-java-temporary-queues-client-samples)
 * **Further information** - Read the [API documentation](http://aws.amazon.com/documentation/sqs/).
 
 ## Feedback
