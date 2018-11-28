@@ -69,7 +69,7 @@ public interface InvertibleFunction<T, R> {
      * function and then applies this function
      * @throws NullPointerException if before is null
      *
-     * @see #andThen(Function)
+     * @see #andThen(InvertibleFunction)
      */
     default <V> InvertibleFunction<V, R> compose(InvertibleFunction<V, T> before) {
         Objects.requireNonNull(before);
@@ -90,7 +90,7 @@ public interface InvertibleFunction<T, R> {
      * applies the {@code after} function
      * @throws NullPointerException if after is null
      *
-     * @see #compose(Function)
+     * @see #compose(InvertibleFunction)
      */
     default <V> InvertibleFunction<T, V> andThen(InvertibleFunction<R, V> after) {
         Objects.requireNonNull(after);

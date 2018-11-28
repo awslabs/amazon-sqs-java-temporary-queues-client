@@ -25,7 +25,7 @@ Request/Response interfaces have other applications, and we plan to make more of
 * **Sign up for AWS** -- Before you begin, you need an AWS account. For more information about creating an AWS account and retrieving your AWS credentials, see [AWS Account and Credentials](http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html) in the AWS SDK for Java Developer Guide.
 * **Sign up for Amazon SQS** -- Go to the Amazon [SQS console](https://console.aws.amazon.com/sqs/home?region=us-east-1) to sign up for the service.
 * **Minimum requirements** -- To use this client, you'll need Java 8 (or later) and [Maven 3](http://maven.apache.org/).
-* **Download** -- Download the [latest preview release](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/releases) or pick it up from Maven (coming soon):
+* **Download** -- Download the [latest preview release](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/releases) or pick it up from Maven:
 ```xml
   <dependency>
     <groupId>com.amazonaws</groupId>
