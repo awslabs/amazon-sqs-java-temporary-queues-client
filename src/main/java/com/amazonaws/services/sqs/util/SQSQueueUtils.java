@@ -119,8 +119,8 @@ public class SQSQueueUtils {
         return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> isQueueEmpty(sqs, queueUrl));
     }
 
-    public static void forEachQueue(ExecutorService executor, AmazonSQS sqs, String prefix, int limit, Consumer<String> action) {
-        List<String> queueUrls = sqs.listQueues(prefix).getQueueUrls();
+    public static void forEachQueue(ExecutorService executor, Function<String, List<String>> lister, String prefix, int limit, Consumer<String> action) {
+        List<String> queueUrls = lister.apply(prefix);
         if (queueUrls.size() >= limit) {
             // Manually work around the 1000 queue limit by forking for each
             // possible next character. Yes this is exponential with a factor of
@@ -129,7 +129,7 @@ public class SQSQueueUtils {
                     .chars()
                     .parallel()
                     .forEach(acceptIntOn(executor, c ->
-            forEachQueue(executor, sqs, prefix + (char)c, limit, action)));
+            forEachQueue(executor, lister, prefix + (char)c, limit, action)));
         } else {
             queueUrls.forEach(acceptOn(executor, action));
         }
