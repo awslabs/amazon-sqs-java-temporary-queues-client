@@ -36,16 +36,20 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
 
     @Test
     public void test() throws Exception {
-        new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
+        SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
             sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
                     new MessageContent("Right back atcha buddy!"));
-        }).start();
-
-        SendMessageRequest request = new SendMessageRequest()
-                .withMessageBody("Hi there!")
-                .withQueueUrl(requestQueueUrl);
-        Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
-
-        assertEquals("Right back atcha buddy!", replyMessage.getBody());
+        });
+        consumer.start();
+        try {
+            SendMessageRequest request = new SendMessageRequest()
+                    .withMessageBody("Hi there!")
+                    .withQueueUrl(requestQueueUrl);
+            Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
+    
+            assertEquals("Right back atcha buddy!", replyMessage.getBody());
+        } finally {
+            consumer.close();
+        }
     }
 }

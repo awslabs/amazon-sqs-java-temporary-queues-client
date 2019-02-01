@@ -69,7 +69,7 @@ public class ExecutorUtils {
         return x -> executor.submit(SerializableRunnable.serializable(() -> consumer.accept(x)));
     }
 
-    public static IntConsumer acceptIntOn(ExecutorService executor, IntConsumer consumer) {
+    public static IntConsumer acceptIntOn(ExecutorService executor, SerializableIntConsumer consumer) {
         return x -> executor.submit(SerializableRunnable.serializable(() -> consumer.accept(x)));
     }
 }

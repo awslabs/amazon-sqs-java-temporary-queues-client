@@ -1,6 +1,7 @@
 package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
+import static com.amazonaws.services.sqs.executors.SerializableFunction.serializable;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.SQS_LIST_QUEUES_LIMIT;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
 
@@ -42,7 +43,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     protected void checkQueuesForIdleness(String prefix) {
         try {
-            forEachQueue(this, p -> sqs.listQueues(p).getQueueUrls(), prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
+            forEachQueue(this, serializable(p -> sqs.listQueues(p).getQueueUrls()), prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
         } catch (Exception e) {
             // Make sure the recurring task never throws so it doesn't terminate.
             LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
