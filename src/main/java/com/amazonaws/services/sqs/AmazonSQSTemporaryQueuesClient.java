@@ -30,7 +30,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     public static AmazonSQS makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
         AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
-        return new AmazonSQSVirtualQueuesClient(deleter);
+        AmazonSQS virtualizer = new AmazonSQSVirtualQueuesClient(deleter);
+        return new AmazonSQSTemporaryQueuesClient(virtualizer, queueNamePrefix);
     }
 
     @Override
