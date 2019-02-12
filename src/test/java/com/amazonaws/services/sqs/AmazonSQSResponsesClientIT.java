@@ -49,7 +49,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
     
             assertEquals("Right back atcha buddy!", replyMessage.getBody());
         } finally {
-            consumer.close();
+            consumer.shutdown();
         }
     }
 }
