@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
@@ -29,15 +30,22 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     private final AmazonSQS sqs;
     private final String queuePrefix;
     private final Map<String, String> queueAttributes;
+    private final Consumer<Exception> exceptionHandler;
 
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix) {
         this(sqs, queuePrefix, Collections.emptyMap());
     }
 
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
+        this(sqs, queuePrefix, queueAttributes, SQSMessageConsumer.DEFAULT_EXCEPTION_HANDLER);
+    }
+
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,
+                Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queuePrefix = queuePrefix;
         this.queueAttributes = new HashMap<>(queueAttributes);
+        this.exceptionHandler = exceptionHandler;
     }
 
     @Override
@@ -68,7 +76,8 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         // TODO-RS: accept an AmazonSQSAsync instead and use its threads instead of our own.
         // TODO-RS: complete the future exceptionally, for the right set of SQS exceptions
         SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, responseQueueUrl,
-                future::complete, () -> future.completeExceptionally(new TimeoutException()));
+                future::complete, () -> future.completeExceptionally(new TimeoutException()),
+                exceptionHandler);
         consumer.runFor(timeout, unit);
         future.whenComplete((message, exception) -> {
             consumer.shutdown();
@@ -110,5 +119,6 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
 
     @Override
     public void shutdown() {
+        // TODO-RS: This should flush outstanding requests
     }
 }

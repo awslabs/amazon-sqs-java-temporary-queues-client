@@ -27,14 +27,18 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
  * configuration and sophistication around scaling up and down to meet
  * demand from the queue.
  */
-public class SQSMessageConsumer {
+public class SQSMessageConsumer implements AutoCloseable {
 
     private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
 
+    public static final Consumer<Exception> DEFAULT_EXCEPTION_HANDLER = 
+            e -> LOG.error("Unexpected exception", e);
+    
     protected final AmazonSQS sqs;
     protected final String queueUrl;
     protected final Consumer<Message> consumer;
-
+    protected final Consumer<Exception> exceptionHandler;
+    
     protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
     protected final CountDownLatch terminated = new CountDownLatch(1);
     protected final Runnable shutdownHook;
@@ -49,14 +53,16 @@ public class SQSMessageConsumer {
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
-        this(sqs, queueUrl, consumer, () -> {});
+        this(sqs, queueUrl, consumer, () -> {}, DEFAULT_EXCEPTION_HANDLER);
     }
 
-    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer, Runnable shutdownHook) {
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+            Runnable shutdownHook, Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queueUrl = queueUrl;
         this.consumer = consumer;
         this.shutdownHook = shutdownHook;
+        this.exceptionHandler = exceptionHandler;
     }
 
     public void start() {
@@ -111,10 +117,10 @@ public class SQSMessageConsumer {
                     if ("Connection pool shut down".equals(e.getMessage())) {
                         break;
                     } else {
-                        LOG.error("Unexpected exception", e);
+                        exceptionHandler.accept(e);
                     }
                 } catch (Exception e) {
-                    LOG.error("Unexpected exception", e);
+                    exceptionHandler.accept(e);
                 }
             }
         } finally {
@@ -132,9 +138,20 @@ public class SQSMessageConsumer {
             sqs.deleteMessage(queueUrl, message.getReceiptHandle());
         } catch (QueueDoesNotExistException e) {
             // Ignore
-        } catch (RuntimeException e) {
-            LOG.error("Exception encounted while processing message with ID " + message.getMessageId(), e);
-            sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+        } catch (RuntimeException processingException) {
+            // TODO-RS: separate accept from delete in exception handling
+            String errorMessage = "Exception encounted while processing message with ID " + message.getMessageId();
+            exceptionHandler.accept(new RuntimeException(errorMessage, processingException));
+            
+            try {
+                sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+            } catch (QueueDoesNotExistException e) {
+                // Ignore
+            } catch (RuntimeException cmvException) {
+                String cmvErrorMessage = "Exception encounted while changing message visibility with ID " + message.getMessageId();
+                exceptionHandler.accept(new RuntimeException(cmvErrorMessage, cmvException));
+                
+            }
         }
     }
 
@@ -150,5 +167,10 @@ public class SQSMessageConsumer {
 
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
         return terminated.await(timeout, unit);
+    }
+
+    @Override
+    public void close() throws Exception {
+        shutdown();
     }
 }
