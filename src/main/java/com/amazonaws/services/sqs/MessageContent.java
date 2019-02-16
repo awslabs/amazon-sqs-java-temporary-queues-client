@@ -48,4 +48,8 @@ public class MessageContent {
     public SendMessageBatchRequestEntry toSendMessageBatchRequestEntry() {
         return new SendMessageBatchRequestEntry().withMessageBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
     }
+    
+    public Message toMessage() {
+        return new Message().withBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
+    }
 }

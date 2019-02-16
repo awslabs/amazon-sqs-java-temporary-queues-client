@@ -20,14 +20,24 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     private static AmazonSQSIdleQueueDeletingClient client;
+    private static AmazonSQSRequester requester;
+    private static AmazonSQSResponder responder;
 
     @Before
     public void setup() {
         client = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
+        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
+        responder = new AmazonSQSResponderClient(sqs);
     }
 
     @After
     public void teardown() {
+        if (responder != null) {
+            responder.shutdown();
+        }
+        if (requester != null) {
+            requester.shutdown();
+        }
         if (client != null) {
             client.teardown();
         }

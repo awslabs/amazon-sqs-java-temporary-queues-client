@@ -85,7 +85,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private final Map<String, QueueMetadata> queues = new ConcurrentHashMap<>();
 
-    private final IdleQueueSweeper idleQueueSweeper;
+    private IdleQueueSweeper idleQueueSweeper;
 
     public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
         super(sqs);
@@ -94,7 +94,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
-        
+    }
+
+    protected void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder) {
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
         CreateQueueRequest request = new CreateQueueRequest()
@@ -102,10 +104,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
                 // Server-side encryption is important here because we're putting
                 // queue URLs into this queue.
                 .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
-        
-        AmazonSQSRequester requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
-        AmazonSQSResponder responder = new AmazonSQSResponderClient(sqs);
+        String sweepingQueueUrl = super.createQueue(request).getQueueUrl();
+
         this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
                 IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
     }
@@ -412,6 +412,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     
     public void teardown() {
         shutdown();
-        amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+        if (idleQueueSweeper != null) {
+            amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+        }
     }
 }

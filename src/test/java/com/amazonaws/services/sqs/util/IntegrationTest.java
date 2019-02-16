@@ -5,7 +5,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.junit.After;
 import org.junit.Before;
 
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
@@ -28,7 +27,7 @@ public class IntegrationTest {
     public void teardownSQSClient() {
         if (sqs != null) {
             // Best effort cleanup of queues. To be complete, we'd have to wait a minute
-            // for 
+            // for the eventual consistency of listQueues()
             sqs.listQueues(queueNamePrefix).getQueueUrls().forEach(queueUrl -> {
                 try {
                     sqs.deleteQueue(queueUrl);
