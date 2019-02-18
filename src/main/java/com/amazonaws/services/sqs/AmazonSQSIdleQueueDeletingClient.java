@@ -13,6 +13,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -96,7 +97,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         this.queueNamePrefix = queueNamePrefix;
     }
 
-    protected void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder) {
+    protected void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder, Consumer<Exception> exceptionHandler) {
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
         CreateQueueRequest request = new CreateQueueRequest()
@@ -107,7 +108,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String sweepingQueueUrl = super.createQueue(request).getQueueUrl();
 
         this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
-                IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
+                IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS, exceptionHandler);
     }
 
     @Override

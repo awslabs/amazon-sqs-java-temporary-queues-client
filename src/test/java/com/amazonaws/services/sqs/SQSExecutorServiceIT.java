@@ -25,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -54,8 +55,8 @@ public class SQSExecutorServiceIT extends IntegrationTest {
 
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSExecutorWithAssertions(String queueUrl) {
-            super(requester, responder, queueUrl);
+        public SQSExecutorWithAssertions(String queueUrl, Consumer<Exception> exceptionHandler) {
+            super(requester, responder, queueUrl, exceptionHandler);
             thisExecutor = new SerializableReference<>(queueUrl, this);
         }
 
@@ -100,7 +101,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
     }
 
     private SQSExecutorService createExecutor(String queueUrl) {
-        SQSExecutorService executor = new SQSExecutorWithAssertions(queueUrl);
+        SQSExecutorService executor = new SQSExecutorWithAssertions(queueUrl, exceptionHandler);
         executors.add(executor);
         return executor;
     }
@@ -251,7 +252,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
                 assertEquals(expected, allQueueUrls);
             }
         } finally {
-            expected.forEach(queueUrl -> {
+            expected.parallelStream().forEach(queueUrl -> {
                 try {
                     sqs.deleteQueue(queueUrl);
                 } catch (QueueDoesNotExistException e) {

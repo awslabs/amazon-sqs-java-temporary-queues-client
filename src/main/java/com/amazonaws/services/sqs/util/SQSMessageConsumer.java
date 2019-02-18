@@ -31,8 +31,9 @@ public class SQSMessageConsumer implements AutoCloseable {
 
     private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
 
-    public static final Consumer<Exception> DEFAULT_EXCEPTION_HANDLER = 
-            e -> LOG.error("Unexpected exception", e);
+    public static final Consumer<Exception> DEFAULT_EXCEPTION_HANDLER = e -> {
+        LOG.error("Unexpected exception", e);
+    };
     
     protected final AmazonSQS sqs;
     protected final String queueUrl;
@@ -150,7 +151,6 @@ public class SQSMessageConsumer implements AutoCloseable {
             } catch (RuntimeException cmvException) {
                 String cmvErrorMessage = "Exception encounted while changing message visibility with ID " + message.getMessageId();
                 exceptionHandler.accept(new RuntimeException(cmvErrorMessage, cmvException));
-                
             }
         }
     }

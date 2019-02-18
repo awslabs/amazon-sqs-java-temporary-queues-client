@@ -20,6 +20,7 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     private static AmazonSQSIdleQueueDeletingClient client;
+    private static String queueUrl;
     private static AmazonSQSRequester requester;
     private static AmazonSQSResponder responder;
 
@@ -32,6 +33,9 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     @After
     public void teardown() {
+        if (client != null && queueUrl != null) {
+            client.deleteQueue(queueUrl);
+        }
         if (responder != null) {
             responder.shutdown();
         }
@@ -45,21 +49,22 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     @Test
     public void idleQueueIsDeleted() throws InterruptedException {
+        client.startSweeper(requester, responder, exceptionHandler);
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueNamePrefix + "-IdleQueue")
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "1");
-        String idleQueueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         boolean deleted = SQSQueueUtils.awaitWithPolling(2, 70, TimeUnit.SECONDS, () -> {
             try {
-                sqs.listQueueTags(idleQueueUrl);
+                sqs.listQueueTags(queueUrl);
                 return false;
             } catch (QueueDoesNotExistException e) {
                 return true;
             }
         });
-        Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl, deleted);
+        Assert.assertTrue("Expected queue to be deleted: " + queueUrl, deleted);
     }
     
     @Test

@@ -17,6 +17,7 @@ public class IntegrationTest {
     protected AmazonSQS sqs;
     // UUIDs are too long for this
     protected String queueNamePrefix = "__" + getClass().getSimpleName() + "-" + ThreadLocalRandom.current().nextInt(1000000);
+    protected ExceptionAsserter exceptionHandler = new ExceptionAsserter();
     
     @Before
     public void setupSQSClient() {
@@ -37,5 +38,6 @@ public class IntegrationTest {
             });
             sqs.shutdown();
         }
+        exceptionHandler.assertNothingThrown();
     }
 }

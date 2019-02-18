@@ -31,7 +31,7 @@ public class SQSExecutorWithVirtualQueuesIT extends IntegrationTest {
         requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).withInternalQueuePrefix(queueNamePrefix).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
-        executor = new SQSExecutorService(requester, responder, requestQueueUrl);
+        executor = new SQSExecutorService(requester, responder, requestQueueUrl, exceptionHandler);
     }
 
     @After

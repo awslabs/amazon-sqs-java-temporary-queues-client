@@ -27,8 +27,9 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     
     private final SerializableReference<IdleQueueSweeper> thisReference;
 
-    public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
-        super(sqsRequester, sqsResponder, queueUrl);
+    public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix,
+            long period, TimeUnit unit, Consumer<Exception> exceptionHandler) {
+        super(sqsRequester, sqsResponder, queueUrl, exceptionHandler);
 
         thisReference = new SerializableReference<>(queueUrl, this);
 

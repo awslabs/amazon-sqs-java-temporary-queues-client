@@ -17,6 +17,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,8 +44,8 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
 
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSScheduledExecutorWithAssertions(String queueUrl) {
-            super(requester, responder, queueUrl);
+        public SQSScheduledExecutorWithAssertions(String queueUrl, Consumer<Exception> exceptionHandler) {
+            super(requester, responder, queueUrl, exceptionHandler);
             thisExecutor = new SerializableReference<>(queueUrl, this);
         }
 
@@ -86,7 +87,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
     }
 
     private SQSScheduledExecutorService createScheduledExecutor(String queueUrl) {
-        SQSScheduledExecutorService executor = new SQSScheduledExecutorWithAssertions(queueUrl);
+        SQSScheduledExecutorService executor = new SQSScheduledExecutorWithAssertions(queueUrl, exceptionHandler);
         executors.add(executor);
         return executor;
     }
