@@ -19,19 +19,25 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     // TODO-RS: Expose configuration
     private final static String QUEUE_RETENTION_PERIOD_SECONDS = Long.toString(TimeUnit.MINUTES.toSeconds(5));
     
+    // These clients are owned by this one, and need to be shutdown when this client is.
+    private final AmazonSQS deleter;
+    private final AmazonSQS virtualizer;
+    
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
 
     private final String prefix;
 
-    private AmazonSQSTemporaryQueuesClient(AmazonSQS sqs, String queueNamePrefix) {
-        super(sqs);
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQS deleter, String queueNamePrefix) {
+        super(virtualizer);
+        this.virtualizer = virtualizer;
+        this.deleter = deleter;
         this.prefix = queueNamePrefix;
     }
 
     public static AmazonSQS makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
         AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
         AmazonSQS virtualizer = new AmazonSQSVirtualQueuesClient(deleter);
-        return new AmazonSQSTemporaryQueuesClient(virtualizer, queueNamePrefix);
+        return new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, queueNamePrefix);
     }
 
     @Override
@@ -53,6 +59,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     public void shutdown() {
         try {
             hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
+            virtualizer.shutdown();
+            deleter.shutdown();
         } finally {
             super.shutdown();
         }

@@ -8,8 +8,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -17,12 +20,14 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
+import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public class SQSQueueUtils {
@@ -119,6 +124,23 @@ public class SQSQueueUtils {
         return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> isQueueEmpty(sqs, queueUrl));
     }
 
+    public static boolean doesQueueExist(AmazonSQS sqs, String queueUrl) {
+        try {
+            sqs.listQueueTags(queueUrl);
+            return true;
+        } catch (QueueDoesNotExistException e) {
+            return false;
+        }
+    }
+    
+    public static boolean awaitQueueCreated(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
+        return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> doesQueueExist(sqs, queueUrl));
+    }
+
+    public static boolean awaitQueueDeleted(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
+        return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> !doesQueueExist(sqs, queueUrl));
+    }
+
     public static void forEachQueue(ExecutorService executor, Function<String, List<String>> lister, String prefix, int limit, Consumer<String> action) {
         List<String> queueUrls = lister.apply(prefix);
         if (queueUrls.size() >= limit) {
@@ -173,5 +195,36 @@ public class SQSQueueUtils {
                 .withMessageBody(request.getMessageBody())
                 .withMessageAttributes(newAttributes)
                 .withDelaySeconds(request.getDelaySeconds());
+    }
+    
+    /**
+     * this method carefully waits for futures. If waiting throws, it converts the exceptions to the
+     * exceptions that SQS clients expect. This is what we use to turn asynchronous calls into
+     * synchronous ones.
+     */
+    // TODO-RS: Copied from QueueBuffer in the buffered asynchronous client
+    public static <V> V waitForFuture(Future<V> future) {
+        V toReturn = null;
+        try {
+            toReturn = future.get();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new AmazonClientException(
+                    "Thread interrupted while waiting for execution result", ie);
+        } catch (ExecutionException ee) {
+            // if the cause of the execution exception is an SQS exception, extract it
+            // and throw the extracted exception to the clients
+            // otherwise, wrap ee in an SQS exception and throw that.
+            Throwable cause = ee.getCause();
+
+            if (cause instanceof AmazonClientException) {
+                throw (AmazonClientException) cause;
+            }
+
+            throw new AmazonClientException(
+                    "Caught an exception while waiting for request to complete...", ee);
+        }
+
+        return toReturn;
     }
 }

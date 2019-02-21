@@ -69,6 +69,15 @@ public class AmazonSQSRequesterClientBuilder {
     public AmazonSQSRequester build() {
         AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
         AmazonSQS temporaryQueuesClient = AmazonSQSTemporaryQueuesClient.makeWrappedClient(sqs, internalQueuePrefix);
-        return new AmazonSQSRequesterClient(temporaryQueuesClient, internalQueuePrefix, queueAttributes);
+        AmazonSQSRequesterClient result = new AmazonSQSRequesterClient(temporaryQueuesClient, internalQueuePrefix, queueAttributes);
+        if (customSQS.isPresent()) {
+            result.setShutdownHook(temporaryQueuesClient::shutdown);
+        } else {
+            result.setShutdownHook(() -> {
+                temporaryQueuesClient.shutdown();
+                sqs.shutdown();
+            });
+        }
+        return result;
     }
 }

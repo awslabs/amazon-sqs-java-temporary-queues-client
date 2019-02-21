@@ -67,7 +67,8 @@ public class MockSQSQueue {
     public DeleteMessageResult deleteMessage(DeleteMessageRequest request) {
         String receiptHandle = request.getReceiptHandle();
         if (inflight.remove(receiptHandle) == null) {
-            // TODO-RS: Error?
+            // TODO-RS: Error? Or at least a hook so tests can
+            // assert it actually succeeded?
         }
         return new DeleteMessageResult();
     }

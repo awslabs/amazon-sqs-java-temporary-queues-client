@@ -53,14 +53,7 @@ public class IdleQueueSweeperIT extends IntegrationTest {
                 AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG, "1"));
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
-        boolean deleted = SQSQueueUtils.awaitWithPolling(2, 70, TimeUnit.SECONDS, () -> {
-            try {
-                sqs.listQueueTags(idleQueueUrl);
-                return false;
-            } catch (QueueDoesNotExistException e) {
-                return true;
-            }
-        });
-        Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl, deleted);
+        Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl,
+                          SQSQueueUtils.awaitQueueDeleted(sqs, idleQueueUrl, 70, TimeUnit.SECONDS));
     }
 }

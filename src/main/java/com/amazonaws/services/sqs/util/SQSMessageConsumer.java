@@ -113,13 +113,6 @@ public class SQSMessageConsumer implements AutoCloseable {
                     } catch (InterruptedException e1) {
                         Thread.currentThread().interrupt();
                     }
-                } catch (IllegalStateException e) {
-                    // TODO-RS: This is a hack
-                    if ("Connection pool shut down".equals(e.getMessage())) {
-                        break;
-                    } else {
-                        exceptionHandler.accept(e);
-                    }
                 } catch (Exception e) {
                     exceptionHandler.accept(e);
                 }
@@ -170,7 +163,7 @@ public class SQSMessageConsumer implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         shutdown();
     }
 }

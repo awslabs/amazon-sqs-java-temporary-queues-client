@@ -88,7 +88,7 @@ public class AmazonSQSRequesterClientTest {
         
         // TODO-RS: Junit 5
         try {
-            future.get(1, TimeUnit.SECONDS);
+            future.get();
             fail();
         } catch (ExecutionException e) {
             assertThat(e.getCause(), instanceOf(TimeoutException.class));

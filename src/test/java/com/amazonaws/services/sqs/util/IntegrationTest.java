@@ -12,7 +12,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 /**
  * Base class for integration tests
  */
-public class IntegrationTest {
+public abstract class IntegrationTest {
     
     protected AmazonSQS sqs;
     // UUIDs are too long for this
