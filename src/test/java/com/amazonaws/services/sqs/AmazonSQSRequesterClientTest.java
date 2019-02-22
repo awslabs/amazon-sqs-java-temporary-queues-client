@@ -20,6 +20,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.ExceptionAsserter;
 import com.amazonaws.services.sqs.util.MockSQS;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 public class AmazonSQSRequesterClientTest {
     
@@ -66,8 +67,8 @@ public class AmazonSQSRequesterClientTest {
         Message response = future.get(5, TimeUnit.SECONDS);
         assertEquals(responseMessageBody, response.getBody());
         
-        // Make sure the response queue was deleted
-        assertEquals(1, sqs.listQueues().getQueueUrls().size());
+        // Make sure the response queue gets deleted
+        SQSQueueUtils.awaitQueueDeleted(sqs, responseQueueUrl, 70, TimeUnit.SECONDS);
     }
 
     @Test
@@ -95,12 +96,6 @@ public class AmazonSQSRequesterClientTest {
         }
         
         // Make sure the response queue was deleted
-        try {
-            sqs.receiveMessage(responseQueueUrl);
-            fail();
-        } catch (QueueDoesNotExistException e) {
-            // Expected
-        }
-        
+        SQSQueueUtils.awaitQueueDeleted(sqs, responseQueueUrl, 70, TimeUnit.SECONDS);
     }
 }

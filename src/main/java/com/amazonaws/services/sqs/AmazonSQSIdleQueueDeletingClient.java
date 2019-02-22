@@ -197,7 +197,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-        // TODO-RS: Need to also delete the failover queue if it exists
         DeleteQueueResult result = super.deleteQueue(request);
         queueDeleted(request.getQueueUrl());
         return result;
@@ -327,7 +326,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
                 return super.receiveMessage(request);
             } catch (QueueDoesNotExistException e) {
                 request.setQueueUrl(recreateQueue(queueUrl));
-                // TODO-RS: This should attempt to receive from both queues as above
                 return super.receiveMessage(request);
             }
         }
@@ -406,7 +404,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             idleQueueSweeper.shutdown();
         }
         queues.values().forEach(metadata -> metadata.buffer.shutdown());
-        super.shutdown();
     }
     
     public void teardown() {

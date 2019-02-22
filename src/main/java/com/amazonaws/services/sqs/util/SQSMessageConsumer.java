@@ -103,7 +103,7 @@ public class SQSMessageConsumer implements AutoCloseable {
                             .withAttributeNames(ATTRIBUTE_NAMES_ALL);
                     List<Message> messages = sqs.receiveMessage(request).getMessages();
     
-                    messages.parallelStream().forEach(this::accept);
+                    messages.parallelStream().forEach(this::handleMessage);
                 } catch (QueueDoesNotExistException e) {
                     // Ignore, it may be recreated!
                     // Slow down on the polling though, to avoid tight looping.
@@ -122,13 +122,13 @@ public class SQSMessageConsumer implements AutoCloseable {
         }
     }
 
-    private void accept(Message message) {
+    private void handleMessage(Message message) {
         if (shuttingDown.get()) {
             sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
             return;
         }
         try {
-            consumer.accept(message);
+            accept(message);
             sqs.deleteMessage(queueUrl, message.getReceiptHandle());
         } catch (QueueDoesNotExistException e) {
             // Ignore
@@ -148,12 +148,20 @@ public class SQSMessageConsumer implements AutoCloseable {
         }
     }
 
+    protected void accept(Message message) {
+        consumer.accept(message);
+    }
+    
     public void shutdown() {
         if (shuttingDown.compareAndSet(false, true)) {
-            shutdownHook.run();
+            runShutdownHook();
         }
     }
 
+    protected void runShutdownHook() {
+        shutdownHook.run();
+    }
+    
     public boolean isShutdown() {
         return shuttingDown.get();
     }
@@ -162,6 +170,15 @@ public class SQSMessageConsumer implements AutoCloseable {
         return terminated.await(timeout, unit);
     }
 
+    public void terminate() {
+        shutdown();
+        try {
+            awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
     @Override
     public void close() {
         shutdown();

@@ -29,9 +29,10 @@ public class IdleQueueSweeperIT extends IntegrationTest {
     }
     
     @After
-    public void teardown() {
+    public void teardown() throws InterruptedException {
         if (sweeper != null) {
             sweeper.shutdown();
+            sweeper.awaitTermination(30, TimeUnit.SECONDS);
         }
         if (sweepingQueueUrl != null) {
             sqs.deleteQueue(sweepingQueueUrl);

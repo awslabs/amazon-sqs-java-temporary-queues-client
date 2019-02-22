@@ -2,6 +2,7 @@ package com.amazonaws.services.sqs;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -31,7 +32,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         super(virtualizer);
         this.virtualizer = virtualizer;
         this.deleter = deleter;
-        this.prefix = queueNamePrefix;
+        this.prefix = queueNamePrefix + UUID.randomUUID().toString();
     }
 
     public static AmazonSQS makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
@@ -57,12 +58,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public void shutdown() {
-        try {
-            hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
-            virtualizer.shutdown();
-            deleter.shutdown();
-        } finally {
-            super.shutdown();
-        }
+        hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
+        virtualizer.shutdown();
+        deleter.shutdown();
     }
 }

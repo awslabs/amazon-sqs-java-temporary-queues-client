@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
@@ -30,16 +31,17 @@ public class SQSExecutorWithVirtualQueuesIT extends IntegrationTest {
     public void setup() {
         requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).withInternalQueuePrefix(queueNamePrefix).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
-        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
+        requestQueueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
         executor = new SQSExecutorService(requester, responder, requestQueueUrl, exceptionHandler);
     }
 
     @After
-    public void teardown() {
+    public void teardown() throws InterruptedException {
         executor.shutdown();
-        sqs.deleteQueue(requestQueueUrl);
+        executor.awaitTermination(30, TimeUnit.SECONDS);
         responder.shutdown();
         requester.shutdown();
+        sqs.deleteQueue(requestQueueUrl);
     }
 
     @Test

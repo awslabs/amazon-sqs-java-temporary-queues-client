@@ -2,6 +2,7 @@ package com.amazonaws.services.sqs;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -22,7 +23,8 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        sqsRequester = new AmazonSQSRequesterClient(sqs, AmazonSQSResponsesClientIT.class.getSimpleName());
+        sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
+                Collections.emptyMap(), exceptionHandler);
         sqsResponder = new AmazonSQSResponderClient(sqs);
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }
@@ -49,7 +51,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
     
             assertEquals("Right back atcha buddy!", replyMessage.getBody());
         } finally {
-            consumer.shutdown();
+            consumer.terminate();
         }
     }
 }

@@ -9,6 +9,7 @@ import static org.junit.Assert.fail;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
@@ -61,7 +62,8 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
+        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
+                Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
@@ -163,7 +165,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         }
         
         // ...and that the message gets purged from the queue
-        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 5, TimeUnit.SECONDS));
+        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 10, TimeUnit.SECONDS));
     }
 
     @Test

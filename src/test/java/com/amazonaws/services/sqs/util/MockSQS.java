@@ -14,6 +14,8 @@ import com.amazonaws.services.sqs.model.DeleteMessageRequest;
 import com.amazonaws.services.sqs.model.DeleteMessageResult;
 import com.amazonaws.services.sqs.model.DeleteQueueRequest;
 import com.amazonaws.services.sqs.model.DeleteQueueResult;
+import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
+import com.amazonaws.services.sqs.model.ListQueueTagsResult;
 import com.amazonaws.services.sqs.model.ListQueuesRequest;
 import com.amazonaws.services.sqs.model.ListQueuesResult;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
@@ -21,6 +23,10 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
+import com.amazonaws.services.sqs.model.TagQueueRequest;
+import com.amazonaws.services.sqs.model.TagQueueResult;
+import com.amazonaws.services.sqs.model.UntagQueueRequest;
+import com.amazonaws.services.sqs.model.UntagQueueResult;
 
 public class MockSQS extends AbstractAmazonSQS {
     private final String accountPrefix;
@@ -37,11 +43,24 @@ public class MockSQS extends AbstractAmazonSQS {
         return queueUrl.substring(accountPrefix.length());
     }
     
+    public MockSQSQueue getQueue(String queueUrl) {
+        if (!queueUrl.startsWith(accountPrefix)) {
+            throw new IllegalArgumentException();
+        } else {
+            String queueName = queueUrl.substring(accountPrefix.length());
+            MockSQSQueue queue = queues.get(queueName);
+            if (queue == null) {
+                throw new QueueDoesNotExistException("The queue does not exist");
+            }
+            return queue;
+        }
+    }
+    
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
         String queueName = request.getQueueName();
         String queueUrl = accountPrefix + queueName;
-        queues.put(queueName, new MockSQSQueue());
+        queues.put(queueName, new MockSQSQueue(queueName));
         return new CreateQueueResult().withQueueUrl(queueUrl);
     }
 
@@ -58,51 +77,42 @@ public class MockSQS extends AbstractAmazonSQS {
     
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-        String queueName = getNameFromQueueUrl(request.getQueueUrl());
-        MockSQSQueue queue = queues.remove(queueName);
-        if (queue == null) {
-            throw new QueueDoesNotExistException("The queue does not exist");
-        }
+        queues.remove(getQueue(request.getQueueUrl()).getQueueName());
         return new DeleteQueueResult();
     }
     
     @Override
     public SendMessageResult sendMessage(SendMessageRequest request) {
-        String queueName = getNameFromQueueUrl(request.getQueueUrl());
-        MockSQSQueue queue = queues.get(queueName);
-        if (queue == null) {
-            throw new QueueDoesNotExistException("The queue does not exist");
-        }
-        return queue.sendMessage(request);
+        return getQueue(request.getQueueUrl()).sendMessage(request);
     }
     
     @Override
     public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
-        String queueName = getNameFromQueueUrl(request.getQueueUrl());
-        MockSQSQueue queue = queues.get(queueName);
-        if (queue == null) {
-            throw new QueueDoesNotExistException("The queue does not exist");
-        }
-        return queue.receiveMessage(request);
+        return getQueue(request.getQueueUrl()).receiveMessage(request);
     }
     
     @Override
     public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest request) {
-        String queueName = getNameFromQueueUrl(request.getQueueUrl());
-        MockSQSQueue queue = queues.get(queueName);
-        if (queue == null) {
-            throw new QueueDoesNotExistException("The queue does not exist");
-        }
-        return queue.changeMessageVisibility(request);
+        return getQueue(request.getQueueUrl()).changeMessageVisibility(request);
     }
     
     @Override
     public DeleteMessageResult deleteMessage(DeleteMessageRequest request) {
-        String queueName = getNameFromQueueUrl(request.getQueueUrl());
-        MockSQSQueue queue = queues.get(queueName);
-        if (queue == null) {
-            throw new QueueDoesNotExistException("The queue does not exist");
-        }
-        return queue.deleteMessage(request);
+        return getQueue(request.getQueueUrl()).deleteMessage(request);
+    }
+    
+    @Override
+    public TagQueueResult tagQueue(TagQueueRequest request) {
+        return getQueue(request.getQueueUrl()).tagQueue(request);
+    }
+    
+    @Override
+    public UntagQueueResult untagQueue(UntagQueueRequest request) {
+        return getQueue(request.getQueueUrl()).untagQueue(request);
+    }
+    
+    @Override
+    public ListQueueTagsResult listQueueTags(ListQueueTagsRequest request) {
+        return getQueue(request.getQueueUrl()).listQueueTags();
     }
 }

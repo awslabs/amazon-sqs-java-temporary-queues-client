@@ -1,8 +1,6 @@
 package com.amazonaws.services.sqs;
 
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -15,7 +13,6 @@ import org.junit.Test;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
@@ -30,7 +27,8 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     @Before
     public void setup() {
         client = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
-        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
+        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
+                Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
     }
 
@@ -74,15 +72,17 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
+        QueueUser user = new QueueUser();
+        user.start();
+     
+        TimeUnit.SECONDS.sleep(5);
+        
         // Use the underlying client so the wrapper has no chance to do anything first
         sqs.deleteQueue(queueUrl);
         
-        // Sleeping is unfortunate here, but it's necessary to ensure we don't lose any
-        // sent messages due to eventual consistency.
+        // Sleeping is unfortunate here, but it's necessary to ensure the eventual consistency
+        // of the delete is resolved first. Otherwise it's easy to get a false positive below.
         TimeUnit.MINUTES.sleep(1);
-        
-        QueueUser user = new QueueUser();
-        user.start();
         
         // Ensure the original queue is eventually recreated. This becoming true at least once
         // indicates that CreateQueue was successfully called, even if it may flip back to false
@@ -90,7 +90,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         Assert.assertTrue("Expected original queue to be recreated: " + queueUrl, 
                           SQSQueueUtils.awaitQueueCreated(sqs, queueUrl, 70, TimeUnit.SECONDS));
         
-        // Ensure the user doesn't experience any send failures or message loss
+        // Ensure the user doesn't experience any send or receive failures
         user.finish();
         
         String failoverQueueName = AmazonSQSIdleQueueDeletingClient.alternateQueueName(queueName);
@@ -116,45 +116,30 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     
     private class QueueUser {
         
-        private final Set<String> sentMessageIDs = Collections.synchronizedSet(new HashSet<>());
-        private final Set<String> receivedMessageIDs = Collections.synchronizedSet(new HashSet<>());
-        
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         SQSMessageConsumer messageConsumer;
         
         public void start() {
-            messageConsumer = new SQSMessageConsumer(client, queueUrl, this::receiveMessage);
+            messageConsumer = new SQSMessageConsumer(client, queueUrl, this::receiveMessage, () -> {}, exceptionHandler);
             messageConsumer.start();
             executor.scheduleAtFixedRate(this::sendMessage, 0, 1, TimeUnit.SECONDS);
         }
         
         private void sendMessage() {
-            SendMessageResult result = client.sendMessage(queueUrl, "Message");
-            System.out.println("Sent: " + result.getMessageId());
-            sentMessageIDs.add(result.getMessageId());
+            try {
+                client.sendMessage(queueUrl, "Message");
+            } catch (RuntimeException e) {
+                exceptionHandler.accept(e);
+            }
         }
         
         private void receiveMessage(Message message) {
-            System.out.println("Received: " + message.getMessageId());
-            receivedMessageIDs.add(message.getMessageId());
+            // Ignore
         }
         
         public void finish() throws InterruptedException {
-            // Stop the sending first, then wait a bit to giving the consumer a change to
-            // receive the rest of the messages.
             executor.shutdown();
-            
-            SQSQueueUtils.awaitWithPolling(1, 20, TimeUnit.SECONDS, () -> stuckMessages().isEmpty());
-            Set<String> missingMessages = stuckMessages();
-            Assert.assertTrue("Never received these messages: " + missingMessages, missingMessages.isEmpty());
-            
-            messageConsumer.shutdown();
-        }
-        
-        public Set<String> stuckMessages() {
-            Set<String> missingMessages = new HashSet<>(sentMessageIDs);
-            missingMessages.removeAll(receivedMessageIDs);
-            return missingMessages;
+            messageConsumer.terminate();
         }
     }
 }

@@ -94,11 +94,6 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     @Override
     public void shutdown() {
         super.shutdown();
-        try {
-            awaitTermination(20, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            LOG.warn("Timed out waiting for IdleQueueSweeper to shut down");
-        }
         thisReference.close();
     }
 }

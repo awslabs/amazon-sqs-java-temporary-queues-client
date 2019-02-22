@@ -32,14 +32,10 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     private final Map<String, String> queueAttributes;
     private final Consumer<Exception> exceptionHandler;
     
-    private final Set<Future<Message>> inflightFutures = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<SQSMessageConsumer> responseConsumers = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private Runnable shutdownHook;
     
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix) {
-        this(sqs, queuePrefix, Collections.emptyMap());
-    }
-
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
         this(sqs, queuePrefix, queueAttributes, SQSMessageConsumer.DEFAULT_EXCEPTION_HANDLER);
     }
@@ -81,25 +77,41 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         sqs.sendMessage(requestWithResponseUrl);
 
         CompletableFuture<Message> future = new CompletableFuture<>();
-        inflightFutures.add(future);
-
+        
         // TODO-RS: accept an AmazonSQSAsync instead and use its threads instead of our own.
         // TODO-RS: complete the future exceptionally, for the right set of SQS exceptions
-        SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, responseQueueUrl,
-                future::complete, () -> future.completeExceptionally(new TimeoutException()),
-                exceptionHandler);
+        SQSMessageConsumer consumer = new ResponseListener(responseQueueUrl, future);
+        responseConsumers.add(consumer);
         consumer.runFor(timeout, unit);
-        future.whenComplete((message, exception) -> {
-            inflightFutures.remove(future);
-            consumer.shutdown();
-            sqs.deleteQueue(responseQueueUrl);
-        });
         return future;
     }
 
+    private class ResponseListener extends SQSMessageConsumer {
+
+        private final CompletableFuture<Message> future;
+        
+        public ResponseListener(String queueUrl, CompletableFuture<Message> future) {
+            super(AmazonSQSRequesterClient.this.sqs, queueUrl, null, null, AmazonSQSRequesterClient.this.exceptionHandler);
+            this.future = future;
+        }
+        
+        @Override
+        protected void accept(Message message) {
+            future.complete(message);
+            terminate();
+        }
+        
+        @Override
+        protected void runShutdownHook() {
+            future.completeExceptionally(new TimeoutException());
+            sqs.deleteQueue(queueUrl);
+            responseConsumers.remove(this);
+        }
+    }
+    
     @Override
     public void shutdown() {
-        inflightFutures.forEach(f -> f.cancel(false));
+        responseConsumers.forEach(SQSMessageConsumer::terminate);
         if (shutdownHook != null) {
             shutdownHook.run();
         }

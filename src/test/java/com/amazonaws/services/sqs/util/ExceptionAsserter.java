@@ -4,7 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 public class ExceptionAsserter implements Consumer<Exception>, AutoCloseable {
+
+    private static final Log LOG = LogFactory.getLog(ExceptionAsserter.class);
 
     private final List<Exception> exceptions = new ArrayList<>();
     
