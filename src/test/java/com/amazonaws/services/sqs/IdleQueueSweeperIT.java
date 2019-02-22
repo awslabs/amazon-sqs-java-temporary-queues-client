@@ -25,13 +25,14 @@ public class IdleQueueSweeperIT extends IntegrationTest {
         requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
         sweepingQueueUrl = sqs.createQueue(queueNamePrefix).getQueueUrl();
-        sweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix, 5, TimeUnit.SECONDS);
+        sweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix, 5, TimeUnit.SECONDS, exceptionHandler);
     }
     
     @After
-    public void teardown() {
+    public void teardown() throws InterruptedException {
         if (sweeper != null) {
             sweeper.shutdown();
+            sweeper.awaitTermination(30, TimeUnit.SECONDS);
         }
         if (sweepingQueueUrl != null) {
             sqs.deleteQueue(sweepingQueueUrl);
@@ -53,14 +54,7 @@ public class IdleQueueSweeperIT extends IntegrationTest {
                 AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG, "1"));
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
-        boolean deleted = SQSQueueUtils.awaitWithPolling(2, 70, TimeUnit.SECONDS, () -> {
-            try {
-                sqs.listQueueTags(idleQueueUrl);
-                return false;
-            } catch (QueueDoesNotExistException e) {
-                return true;
-            }
-        });
-        Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl, deleted);
+        Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl,
+                          SQSQueueUtils.awaitQueueDeleted(sqs, idleQueueUrl, 70, TimeUnit.SECONDS));
     }
 }

@@ -3,14 +3,14 @@ package com.amazonaws.services.sqs;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
@@ -29,15 +29,26 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     private final AmazonSQS sqs;
     private final String queuePrefix;
     private final Map<String, String> queueAttributes;
+    private final Consumer<Exception> exceptionHandler;
+    
+    private final Set<SQSMessageConsumer> responseConsumers = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix) {
-        this(sqs, queuePrefix, Collections.emptyMap());
+    private Runnable shutdownHook;
+    
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
+        this(sqs, queuePrefix, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,
+                Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queuePrefix = queuePrefix;
         this.queueAttributes = new HashMap<>(queueAttributes);
+        this.exceptionHandler = exceptionHandler;
+    }
+
+    public void setShutdownHook(Runnable shutdownHook) {
+        this.shutdownHook = shutdownHook;
     }
 
     @Override
@@ -46,8 +57,8 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     }
 
     @Override
-    public Message sendMessageAndGetResponse(SendMessageRequest request, int timeout, TimeUnit unit) throws TimeoutException {
-        return waitForFuture(sendMessageAndGetResponseAsync(request, timeout, unit), timeout, unit);
+    public Message sendMessageAndGetResponse(SendMessageRequest request, int timeout, TimeUnit unit) {
+        return SQSQueueUtils.waitForFuture(sendMessageAndGetResponseAsync(request, timeout, unit));
     }
 
     @Override
@@ -65,50 +76,43 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         sqs.sendMessage(requestWithResponseUrl);
 
         CompletableFuture<Message> future = new CompletableFuture<>();
+        
         // TODO-RS: accept an AmazonSQSAsync instead and use its threads instead of our own.
         // TODO-RS: complete the future exceptionally, for the right set of SQS exceptions
-        SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, responseQueueUrl,
-                future::complete, () -> future.completeExceptionally(new TimeoutException()));
+        SQSMessageConsumer consumer = new ResponseListener(responseQueueUrl, future);
+        responseConsumers.add(consumer);
         consumer.runFor(timeout, unit);
-        future.whenComplete((message, exception) -> {
-            consumer.shutdown();
-            sqs.deleteQueue(responseQueueUrl);
-        });
         return future;
     }
 
-    /**
-     * this method carefully waits for futures. If waiting throws, it converts the exceptions to the
-     * exceptions that SQS clients expect. This is what we use to turn asynchronous calls into
-     * synchronous ones.
-     */
-    // TODO-RS: Copied from QueueBuffer in the buffered asynchronous client
-    private <ResultType> ResultType waitForFuture(Future<ResultType> future, long timeout, TimeUnit unit) throws TimeoutException {
-        ResultType toReturn = null;
-        try {
-            toReturn = future.get(timeout, unit);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new AmazonClientException(
-                    "Thread interrupted while waiting for execution result", ie);
-        } catch (ExecutionException ee) {
-            // if the cause of the execution exception is an SQS exception, extract it
-            // and throw the extracted exception to the clients
-            // otherwise, wrap ee in an SQS exception and throw that.
-            Throwable cause = ee.getCause();
+    private class ResponseListener extends SQSMessageConsumer {
 
-            if (cause instanceof AmazonClientException) {
-                throw (AmazonClientException) cause;
-            }
-
-            throw new AmazonClientException(
-                    "Caught an exception while waiting for request to complete...", ee);
+        private final CompletableFuture<Message> future;
+        
+        public ResponseListener(String queueUrl, CompletableFuture<Message> future) {
+            super(AmazonSQSRequesterClient.this.sqs, queueUrl, null, null, AmazonSQSRequesterClient.this.exceptionHandler);
+            this.future = future;
         }
-
-        return toReturn;
+        
+        @Override
+        protected void accept(Message message) {
+            future.complete(message);
+            terminate();
+        }
+        
+        @Override
+        protected void runShutdownHook() {
+            future.completeExceptionally(new TimeoutException());
+            sqs.deleteQueue(queueUrl);
+            responseConsumers.remove(this);
+        }
     }
-
+    
     @Override
     public void shutdown() {
+        responseConsumers.forEach(SQSMessageConsumer::terminate);
+        if (shutdownHook != null) {
+            shutdownHook.run();
+        }
     }
 }

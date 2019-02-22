@@ -2,6 +2,7 @@ package com.amazonaws.services.sqs;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -22,7 +23,8 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        sqsRequester = new AmazonSQSRequesterClient(sqs, AmazonSQSResponsesClientIT.class.getSimpleName());
+        sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
+                Collections.emptyMap(), exceptionHandler);
         sqsResponder = new AmazonSQSResponderClient(sqs);
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }
@@ -36,16 +38,20 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
 
     @Test
     public void test() throws Exception {
-        new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
+        SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
             sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
                     new MessageContent("Right back atcha buddy!"));
-        }).start();
-
-        SendMessageRequest request = new SendMessageRequest()
-                .withMessageBody("Hi there!")
-                .withQueueUrl(requestQueueUrl);
-        Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
-
-        assertEquals("Right back atcha buddy!", replyMessage.getBody());
+        });
+        consumer.start();
+        try {
+            SendMessageRequest request = new SendMessageRequest()
+                    .withMessageBody("Hi there!")
+                    .withQueueUrl(requestQueueUrl);
+            Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
+    
+            assertEquals("Right back atcha buddy!", replyMessage.getBody());
+        } finally {
+            consumer.terminate();
+        }
     }
 }

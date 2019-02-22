@@ -177,6 +177,8 @@ public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
 
     @Override
     public void shutdown() {
+        // By default do NOT shutdown the wrapped client. It may or may not
+        // make sense to based on whether the wrapper owns the wrapped client or not.
     }
 
     @Override

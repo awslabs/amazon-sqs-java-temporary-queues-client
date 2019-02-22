@@ -12,6 +12,7 @@ import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +26,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -54,8 +56,8 @@ public class SQSExecutorServiceIT extends IntegrationTest {
 
         SerializableReference<SQSExecutorService> thisExecutor;
 
-        public SQSExecutorWithAssertions(String queueUrl) {
-            super(requester, responder, queueUrl);
+        public SQSExecutorWithAssertions(String queueUrl, Consumer<Exception> exceptionHandler) {
+            super(requester, responder, queueUrl, exceptionHandler);
             thisExecutor = new SerializableReference<>(queueUrl, this);
         }
 
@@ -71,7 +73,8 @@ public class SQSExecutorServiceIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
+        requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
+                Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
@@ -83,9 +86,9 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         try {
             assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
         } finally {
-            sqs.deleteQueue(queueUrl);
             requester.shutdown();
             responder.shutdown();
+            sqs.deleteQueue(queueUrl);
         }
     }
 
@@ -100,7 +103,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
     }
 
     private SQSExecutorService createExecutor(String queueUrl) {
-        SQSExecutorService executor = new SQSExecutorWithAssertions(queueUrl);
+        SQSExecutorService executor = new SQSExecutorWithAssertions(queueUrl, exceptionHandler);
         executors.add(executor);
         return executor;
     }
@@ -200,7 +203,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
 
         SQSExecutorService executor = createExecutor(queueUrl);
         executor.execute(() -> seed(executor));
-        assertTrue(tasksCompletedLatch.await(20, TimeUnit.SECONDS));
+        assertTrue(tasksCompletedLatch.await(1, TimeUnit.MINUTES));
     }
 
     @Test
@@ -251,7 +254,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
                 assertEquals(expected, allQueueUrls);
             }
         } finally {
-            expected.forEach(queueUrl -> {
+            expected.parallelStream().forEach(queueUrl -> {
                 try {
                     sqs.deleteQueue(queueUrl);
                 } catch (QueueDoesNotExistException e) {

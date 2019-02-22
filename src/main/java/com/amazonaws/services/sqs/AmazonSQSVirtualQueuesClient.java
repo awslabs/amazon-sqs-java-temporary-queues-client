@@ -23,6 +23,8 @@ import com.amazonaws.services.sqs.model.DeleteMessageRequest;
 import com.amazonaws.services.sqs.model.DeleteMessageResult;
 import com.amazonaws.services.sqs.model.DeleteQueueRequest;
 import com.amazonaws.services.sqs.model.DeleteQueueResult;
+import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
+import com.amazonaws.services.sqs.model.ListQueueTagsResult;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
@@ -32,6 +34,10 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
+import com.amazonaws.services.sqs.model.TagQueueRequest;
+import com.amazonaws.services.sqs.model.TagQueueResult;
+import com.amazonaws.services.sqs.model.UntagQueueRequest;
+import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
@@ -139,7 +145,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
         return getVirtualQueue(request.getQueueUrl())
-                .map(virtualQueue -> virtualQueue.deleteQueue(request))
+                .map(virtualQueue -> virtualQueue.deleteQueue())
                 .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
     }
 
@@ -153,8 +159,29 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     }
 
     @Override
+    public TagQueueResult tagQueue(TagQueueRequest request) {
+        return getVirtualQueue(request.getQueueUrl())
+                .map(virtualQueue -> virtualQueue.tagQueue(request))
+                .orElseGet(() -> amazonSqsToBeExtended.tagQueue(request));
+    }
+    
+    @Override
+    public UntagQueueResult untagQueue(UntagQueueRequest request) {
+        return getVirtualQueue(request.getQueueUrl())
+                .map(virtualQueue -> virtualQueue.untagQueue(request))
+                .orElseGet(() -> amazonSqsToBeExtended.untagQueue(request));
+    }
+    
+    @Override
+    public ListQueueTagsResult listQueueTags(ListQueueTagsRequest request) {
+        return getVirtualQueue(request.getQueueUrl())
+                .map(virtualQueue -> virtualQueue.listQueueTags())
+                .orElseGet(() -> amazonSqsToBeExtended.listQueueTags(request));
+    }
+    
+    @Override
     public void shutdown() {
-        hostQueues.values().forEach(HostQueue::shutdown);
+        hostQueues.values().parallelStream().forEach(HostQueue::shutdown);
         super.shutdown();
     }
 
@@ -185,13 +212,14 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         public void shutdown() {
             this.buffer.shutdown();
-            this.consumer.shutdown();
+            this.consumer.terminate();
         }
     }
 
     private class VirtualQueue {
         
         private final VirtualQueueID id;
+        private final ConcurrentMap<String, String> tags = new ConcurrentHashMap<>();
         private final ReceiveQueueBuffer receiveBuffer;
         private final Optional<Long> retentionPeriod;
         private Optional<ScheduledFuture<?>> expireFuture;
@@ -243,11 +271,25 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     executor.schedule(() -> AmazonSQSVirtualQueuesClient.this.deleteQueue(id.getQueueUrl()), period, TimeUnit.SECONDS));
         }
         
-        public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
+        public DeleteQueueResult deleteQueue() {
             virtualQueues.remove(id.getVirtualQueueName());
             receiveBuffer.shutdown();
             expireFuture.ifPresent(f -> f.cancel(false));
             return new DeleteQueueResult();
+        }
+        
+        public TagQueueResult tagQueue(TagQueueRequest request) {
+            tags.putAll(request.getTags());
+            return new TagQueueResult();
+        }
+        
+        public UntagQueueResult untagQueue(UntagQueueRequest request) {
+            tags.keySet().removeAll(request.getTagKeys());
+            return new UntagQueueResult();
+        }
+        
+        public ListQueueTagsResult listQueueTags() {
+            return new ListQueueTagsResult().withTags(tags);
         }
     }
     

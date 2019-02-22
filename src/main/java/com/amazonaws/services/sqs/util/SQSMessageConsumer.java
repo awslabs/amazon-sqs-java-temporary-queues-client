@@ -27,14 +27,13 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
  * configuration and sophistication around scaling up and down to meet
  * demand from the queue.
  */
-public class SQSMessageConsumer {
-
-    private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
+public class SQSMessageConsumer implements AutoCloseable {
 
     protected final AmazonSQS sqs;
     protected final String queueUrl;
     protected final Consumer<Message> consumer;
-
+    protected final Consumer<Exception> exceptionHandler;
+    
     protected final AtomicBoolean shuttingDown = new AtomicBoolean(false);
     protected final CountDownLatch terminated = new CountDownLatch(1);
     protected final Runnable shutdownHook;
@@ -49,14 +48,16 @@ public class SQSMessageConsumer {
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
-        this(sqs, queueUrl, consumer, () -> {});
+        this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
-    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer, Runnable shutdownHook) {
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+            Runnable shutdownHook, Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queueUrl = queueUrl;
         this.consumer = consumer;
         this.shutdownHook = shutdownHook;
+        this.exceptionHandler = exceptionHandler;
     }
 
     public void start() {
@@ -96,7 +97,7 @@ public class SQSMessageConsumer {
                             .withAttributeNames(ATTRIBUTE_NAMES_ALL);
                     List<Message> messages = sqs.receiveMessage(request).getMessages();
     
-                    messages.parallelStream().forEach(this::accept);
+                    messages.parallelStream().forEach(this::handleMessage);
                 } catch (QueueDoesNotExistException e) {
                     // Ignore, it may be recreated!
                     // Slow down on the polling though, to avoid tight looping.
@@ -106,15 +107,8 @@ public class SQSMessageConsumer {
                     } catch (InterruptedException e1) {
                         Thread.currentThread().interrupt();
                     }
-                } catch (IllegalStateException e) {
-                    // TODO-RS: This is a hack
-                    if ("Connection pool shut down".equals(e.getMessage())) {
-                        break;
-                    } else {
-                        LOG.error("Unexpected exception", e);
-                    }
                 } catch (Exception e) {
-                    LOG.error("Unexpected exception", e);
+                    exceptionHandler.accept(e);
                 }
             }
         } finally {
@@ -122,33 +116,65 @@ public class SQSMessageConsumer {
         }
     }
 
-    private void accept(Message message) {
+    private void handleMessage(Message message) {
         if (shuttingDown.get()) {
             sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
             return;
         }
         try {
-            consumer.accept(message);
+            accept(message);
             sqs.deleteMessage(queueUrl, message.getReceiptHandle());
         } catch (QueueDoesNotExistException e) {
             // Ignore
-        } catch (RuntimeException e) {
-            LOG.error("Exception encounted while processing message with ID " + message.getMessageId(), e);
-            sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+        } catch (RuntimeException processingException) {
+            // TODO-RS: separate accept from delete in exception handling
+            String errorMessage = "Exception encounted while processing message with ID " + message.getMessageId();
+            exceptionHandler.accept(new RuntimeException(errorMessage, processingException));
+            
+            try {
+                sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+            } catch (QueueDoesNotExistException e) {
+                // Ignore
+            } catch (RuntimeException cmvException) {
+                String cmvErrorMessage = "Exception encounted while changing message visibility with ID " + message.getMessageId();
+                exceptionHandler.accept(new RuntimeException(cmvErrorMessage, cmvException));
+            }
         }
     }
 
+    protected void accept(Message message) {
+        consumer.accept(message);
+    }
+    
     public void shutdown() {
         if (shuttingDown.compareAndSet(false, true)) {
-            shutdownHook.run();
+            runShutdownHook();
         }
     }
 
+    protected void runShutdownHook() {
+        shutdownHook.run();
+    }
+    
     public boolean isShutdown() {
         return shuttingDown.get();
     }
 
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
         return terminated.await(timeout, unit);
+    }
+
+    public void terminate() {
+        shutdown();
+        try {
+            awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    @Override
+    public void close() {
+        shutdown();
     }
 }

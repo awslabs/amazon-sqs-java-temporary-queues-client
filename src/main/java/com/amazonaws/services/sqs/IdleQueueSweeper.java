@@ -1,12 +1,14 @@
 package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
+import static com.amazonaws.services.sqs.executors.SerializableFunction.serializable;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.SQS_LIST_QUEUES_LIMIT;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.forEachQueue;
 
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -25,11 +27,14 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
     
     private final SerializableReference<IdleQueueSweeper> thisReference;
+    private final Consumer<Exception> exceptionHandler;
 
-    public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix, long period, TimeUnit unit) {
-        super(sqsRequester, sqsResponder, queueUrl);
+    public IdleQueueSweeper(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, String queueNamePrefix,
+            long period, TimeUnit unit, Consumer<Exception> exceptionHandler) {
+        super(sqsRequester, sqsResponder, queueUrl, exceptionHandler);
 
         thisReference = new SerializableReference<>(queueUrl, this);
+        this.exceptionHandler = exceptionHandler;
 
         // Jitter the startup times to avoid throttling on tagging as much as possible.
         long initialDelay = ThreadLocalRandom.current().nextLong(period);
@@ -41,11 +46,17 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     }
 
     protected void checkQueuesForIdleness(String prefix) {
+        LOG.info("Checking all queues begining with prefix " + prefix + " for idleness");
+        
         try {
-            forEachQueue(this, sqs, prefix, SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
+            forEachQueue(this, serializable(p -> sqs.listQueues(p).getQueueUrls()), prefix,
+                    SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
+        } catch (RejectedExecutionException e) {
+            // Already shutting down, ignore
         } catch (Exception e) {
             // Make sure the recurring task never throws so it doesn't terminate.
-            LOG.error("Encounted error when checking queues for idleness (prefix = " + prefix + ")", e);
+            String message = "Encounted error when checking queues for idleness (prefix = " + prefix + ")";
+            exceptionHandler.accept(new RuntimeException(message, e));
         }
     }
 
@@ -83,11 +94,6 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     @Override
     public void shutdown() {
         super.shutdown();
-        try {
-            awaitTermination(20, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            LOG.warn("Timed out waiting for IdleQueueSweeper to shut down");
-        }
         thisReference.close();
     }
 }

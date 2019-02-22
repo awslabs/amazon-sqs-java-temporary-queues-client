@@ -9,7 +9,7 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 class AmazonSQSResponderClient implements AmazonSQSResponder {
     
-    private static final Log LOG = LogFactory.getLog(AmazonSQSRequesterClient.class);
+    private static final Log LOG = LogFactory.getLog(AmazonSQSResponderClient.class);
 
     private final AmazonSQS sqs;
 

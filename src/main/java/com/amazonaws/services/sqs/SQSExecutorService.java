@@ -25,8 +25,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
-import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.executors.Base64Serializer;
 import com.amazonaws.services.sqs.executors.CompletedFutureSerializer;
 import com.amazonaws.services.sqs.executors.Deduplicated;
@@ -60,16 +60,16 @@ class SQSExecutorService extends AbstractExecutorService {
 
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl) {
-        this(sqsRequester, sqsResponder, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE));
+    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, Consumer<Exception> exceptionHandler) {
+        this(sqsRequester, sqsResponder, queueUrl, DefaultSerializer.INSTANCE.andThen(Base64Serializer.INSTANCE), exceptionHandler);
     }
 
-    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, InvertibleFunction<Object, String> serializer) {
+    public SQSExecutorService(AmazonSQSRequester sqsRequester, AmazonSQSResponder sqsResponder, String queueUrl, InvertibleFunction<Object, String> serializer, Consumer<Exception> exceptionHandler) {
         this.sqs = sqsRequester.getAmazonSQS();
         this.sqsRequester = sqsRequester;
         this.sqsResponder = sqsResponder;
         this.queueUrl = queueUrl;
-        this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept);
+        this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept, () -> {}, exceptionHandler);
         this.messageConsumer.start();
         this.serializer = serializer;
     }

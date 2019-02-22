@@ -13,6 +13,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -47,6 +48,7 @@ import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
@@ -60,7 +62,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
-    private static final long IDLE_QUEUE_SWEEPER_PASS_SECONDS = 10;
 
     static final String LAST_HEARTBEAT_TIMESTAMP_TAG = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
 
@@ -85,7 +86,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private final Map<String, QueueMetadata> queues = new ConcurrentHashMap<>();
 
-    private final IdleQueueSweeper idleQueueSweeper;
+    private IdleQueueSweeper idleQueueSweeper;
 
     public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
         super(sqs);
@@ -94,6 +95,14 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
+    }
+
+    protected synchronized void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder,
+                                             long period, TimeUnit unit,
+                                             Consumer<Exception> exceptionHandler) {
+        if (this.idleQueueSweeper != null) {
+            throw new IllegalStateException("Idle queue sweeper is already started!");
+        }
         
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
@@ -102,12 +111,10 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
                 // Server-side encryption is important here because we're putting
                 // queue URLs into this queue.
                 .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        String sweepingQueueUrl = sqs.createQueue(request).getQueueUrl();
-        
-        AmazonSQSRequester requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix);
-        AmazonSQSResponder responder = new AmazonSQSResponderClient(sqs);
+        String sweepingQueueUrl = super.createQueue(request).getQueueUrl();
+
         this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
-                IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS);
+                period, unit, exceptionHandler);
     }
 
     @Override
@@ -130,14 +137,15 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         CreateQueueResult result = super.createQueue(superRequest);
         String queueUrl = result.getQueueUrl();
 
+        String retentionPeriodString = retentionPeriod.get().toString();
         amazonSqsToBeExtended.tagQueue(queueUrl,
-                Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriod.get().toString()));
+                Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString));
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
-        Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl,
-                Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
-                        QueueAttributeName.VisibilityTimeout.toString()))
-                        .getAttributes();
+        List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
+                                                    QueueAttributeName.VisibilityTimeout.toString());
+        Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl, attributeNames).getAttributes();
+        createdAttributes.put(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriodString);
 
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
         queues.put(queueUrl, metadata);
@@ -248,7 +256,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             try {
                 createQueue(new CreateQueueRequest().withQueueName(queue.name)
                         .withAttributes(queue.attributes));
-                LOG.warn("Queue " + queueUrl + " successfully recreated.");
+                LOG.info("Queue " + queueUrl + " successfully recreated.");
                 return queueUrl;
             } catch (QueueDeletedRecentlyException e) {
                 // Ignore, will retry later
@@ -259,11 +267,11 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String alternateQueueUrl = alternateQueueName(queueUrl);
         QueueMetadata metadata = queues.get(alternateQueueUrl);
         if (metadata == null && queue != null) {
-            LOG.warn("Attempting to create failover queue: " + alternateQueueUrl);
+            LOG.info("Attempting to create failover queue: " + alternateQueueUrl);
             try {
                 createQueue(new CreateQueueRequest().withQueueName(alternateQueueName(queue.name))
                         .withAttributes(queue.attributes));
-                LOG.warn("Failover queue " + alternateQueueUrl + " successfully created.");
+                LOG.info("Failover queue " + alternateQueueUrl + " successfully created.");
             } catch (QueueDeletedRecentlyException e) {
                 // Ignore, will retry later
                 LOG.warn("Failover queue " + alternateQueueUrl + " was recently deleted, cannot create it yet.");
@@ -272,7 +280,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         return alternateQueueUrl;
     }
 
-    private String alternateQueueName(String prefix) {
+    static String alternateQueueName(String prefix) {
         return prefix + "-Failover";
     }
 
@@ -300,8 +308,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
-        // Here we have to also fetch from the backup queue if we created it
-        // TODO-RS: Need to decide to stop fetching from the backup queue at some point too!
+        // Here we have to also fetch from the backup queue if we created it.
         String queueUrl = request.getQueueUrl();
         String alternateQueueUrl = alternateQueueName(queueUrl);
         QueueMetadata alternateMetadata = queues.get(alternateQueueUrl);
@@ -312,17 +319,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
                     queueUrl, request.getVisibilityTimeout());
             buffer.submit(executor, () -> receiveIgnoringNonExistantQueue(alternateRequest),
                     queueUrl, request.getVisibilityTimeout());
-            try {
-                Future<ReceiveMessageResult> receiveFuture = buffer.receiveMessageAsync(request);
-                return receiveFuture.get(request.getWaitTimeSeconds(), TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return new ReceiveMessageResult();
-            } catch (ExecutionException e) {
-                throw (RuntimeException)e.getCause();
-            } catch (TimeoutException e) {
-                return new ReceiveMessageResult();
-            }
+            Future<ReceiveMessageResult> receiveFuture = buffer.receiveMessageAsync(request);
+            return SQSQueueUtils.waitForFuture(receiveFuture);
         } else {
             try {
                 heartbeatToQueueIfNecessary(queueUrl);
@@ -336,8 +334,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private List<Message> receiveIgnoringNonExistantQueue(ReceiveMessageRequest request) {
         try {
-            List<Message> messages = amazonSqsToBeExtended.receiveMessage(request).getMessages();
-            return messages;
+            heartbeatToQueueIfNecessary(request.getQueueUrl());
+            return amazonSqsToBeExtended.receiveMessage(request).getMessages();
         } catch (QueueDoesNotExistException e) {
             return Collections.emptyList();
         }
@@ -407,11 +405,12 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             idleQueueSweeper.shutdown();
         }
         queues.values().forEach(metadata -> metadata.buffer.shutdown());
-        super.shutdown();
     }
     
     public void teardown() {
         shutdown();
-        amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+        if (idleQueueSweeper != null) {
+            amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+        }
     }
 }

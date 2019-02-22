@@ -2,6 +2,7 @@ package com.amazonaws.services.sqs;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -19,20 +20,32 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     // TODO-RS: Expose configuration
     private final static String QUEUE_RETENTION_PERIOD_SECONDS = Long.toString(TimeUnit.MINUTES.toSeconds(5));
     
+    // These clients are owned by this one, and need to be shutdown when this client is.
+    private final AmazonSQSIdleQueueDeletingClient deleter;
+    private final AmazonSQS virtualizer;
+    
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
 
     private final String prefix;
 
-    private AmazonSQSTemporaryQueuesClient(AmazonSQS sqs, String queueNamePrefix) {
-        super(sqs);
-        this.prefix = queueNamePrefix;
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
+        super(virtualizer);
+        this.virtualizer = virtualizer;
+        this.deleter = deleter;
+        this.prefix = queueNamePrefix + UUID.randomUUID().toString();
     }
 
-    public static AmazonSQS makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
-        return new AmazonSQSVirtualQueuesClient(deleter);
+    public static AmazonSQSTemporaryQueuesClient makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
+        AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
+        AmazonSQS virtualizer = new AmazonSQSVirtualQueuesClient(deleter);
+        return new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, queueNamePrefix);
     }
 
+    public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder) {
+        // TODO-RS: Allow configuration of the sweeping period?
+        deleter.startSweeper(requester, responder, 5, TimeUnit.MINUTES, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    }
+    
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
@@ -50,10 +63,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public void shutdown() {
-        try {
-            hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
-        } finally {
-            super.shutdown();
-        }
+        hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
+        virtualizer.shutdown();
+        deleter.shutdown();
     }
 }
