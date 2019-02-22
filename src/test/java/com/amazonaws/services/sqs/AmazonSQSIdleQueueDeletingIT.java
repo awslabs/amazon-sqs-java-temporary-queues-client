@@ -54,14 +54,15 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     @Test
     public void idleQueueIsDeleted() throws InterruptedException {
-        client.startSweeper(requester, responder, exceptionHandler);
+        client.startSweeper(requester, responder, 5, TimeUnit.SECONDS, exceptionHandler);
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueNamePrefix + "-IdleQueue")
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "1");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
-        Assert.assertTrue("Expected queue to be deleted: " + queueUrl, SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
+        Assert.assertTrue("Expected queue to be deleted: " + queueUrl,
+                          SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
     }
     
     @Test

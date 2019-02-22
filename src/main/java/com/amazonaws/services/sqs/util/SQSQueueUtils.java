@@ -12,13 +12,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -32,6 +34,8 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public class SQSQueueUtils {
 
+    private static final Log LOG = LogFactory.getLog(SQSQueueUtils.class);
+
     public static final String ATTRIBUTE_NAMES_ALL = "All";
 
     public static final String MESSAGE_ATTRIBUTE_TYPE_STRING = "String";
@@ -40,6 +44,10 @@ public class SQSQueueUtils {
 
     public static final int SQS_LIST_QUEUES_LIMIT = 1000;
 
+    public static final Consumer<Exception> DEFAULT_EXCEPTION_HANDLER = e -> {
+        LOG.error("Unexpected exception", e);
+    };
+    
     private SQSQueueUtils() {
         // Never instantiated
     }

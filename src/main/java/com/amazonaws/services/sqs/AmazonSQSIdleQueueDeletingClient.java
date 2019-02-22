@@ -62,7 +62,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
-    private static final long IDLE_QUEUE_SWEEPER_PASS_SECONDS = 10;
 
     static final String LAST_HEARTBEAT_TIMESTAMP_TAG = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
 
@@ -98,7 +97,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         this.queueNamePrefix = queueNamePrefix;
     }
 
-    protected synchronized void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder, Consumer<Exception> exceptionHandler) {
+    protected synchronized void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder,
+                                             long period, TimeUnit unit,
+                                             Consumer<Exception> exceptionHandler) {
         if (this.idleQueueSweeper != null) {
             throw new IllegalStateException("Idle queue sweeper is already started!");
         }
@@ -113,7 +114,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String sweepingQueueUrl = super.createQueue(request).getQueueUrl();
 
         this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
-                IDLE_QUEUE_SWEEPER_PASS_SECONDS, TimeUnit.SECONDS, exceptionHandler);
+                period, unit, exceptionHandler);
     }
 
     @Override

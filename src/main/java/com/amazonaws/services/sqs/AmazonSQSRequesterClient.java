@@ -7,7 +7,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -37,7 +36,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     private Runnable shutdownHook;
     
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
-        this(sqs, queuePrefix, queueAttributes, SQSMessageConsumer.DEFAULT_EXCEPTION_HANDLER);
+        this(sqs, queuePrefix, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,

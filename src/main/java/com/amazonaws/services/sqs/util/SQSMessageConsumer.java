@@ -29,12 +29,6 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
  */
 public class SQSMessageConsumer implements AutoCloseable {
 
-    private static final Log LOG = LogFactory.getLog(ReceiveQueueBuffer.class);
-
-    public static final Consumer<Exception> DEFAULT_EXCEPTION_HANDLER = e -> {
-        LOG.error("Unexpected exception", e);
-    };
-    
     protected final AmazonSQS sqs;
     protected final String queueUrl;
     protected final Consumer<Message> consumer;
@@ -54,7 +48,7 @@ public class SQSMessageConsumer implements AutoCloseable {
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
-        this(sqs, queueUrl, consumer, () -> {}, DEFAULT_EXCEPTION_HANDLER);
+        this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
