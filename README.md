@@ -30,7 +30,7 @@ Request/Response interfaces have other applications, and we plan to make more of
   <dependency>
     <groupId>com.amazonaws</groupId>
     <artifactId>amazon-sqs-java-temporary-queues-client</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
     <type>jar</type>
   </dependency>
 ```
