@@ -1,7 +1,10 @@
 package com.amazonaws.services.sqs;
 
+import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
+
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +26,8 @@ import com.amazonaws.services.sqs.model.DeleteMessageRequest;
 import com.amazonaws.services.sqs.model.DeleteMessageResult;
 import com.amazonaws.services.sqs.model.DeleteQueueRequest;
 import com.amazonaws.services.sqs.model.DeleteQueueResult;
+import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
+import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
 import com.amazonaws.services.sqs.model.ListQueueTagsResult;
 import com.amazonaws.services.sqs.model.Message;
@@ -150,6 +155,13 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     }
 
     @Override
+    public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
+        return getVirtualQueue(request.getQueueUrl())
+                .map(virtualQueue -> virtualQueue.getQueueAttributes(request))
+                .orElseGet(() -> amazonSqsToBeExtended.getQueueAttributes(request));
+    }
+    
+    @Override
     public SetQueueAttributesResult setQueueAttributes(SetQueueAttributesRequest request) {
         if (VirtualQueueID.fromQueueUrl(request.getQueueUrl()).isPresent()) {
             throw new IllegalArgumentException("Cannot change queue attributes of virtual queues after creation: " + request.getQueueUrl());
@@ -219,6 +231,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     private class VirtualQueue {
         
         private final VirtualQueueID id;
+        private final HostQueue hostQueue;
         private final ConcurrentMap<String, String> tags = new ConcurrentHashMap<>();
         private final ReceiveQueueBuffer receiveBuffer;
         private final Optional<Long> retentionPeriod;
@@ -226,6 +239,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         
         public VirtualQueue(HostQueue hostQueue, String queueName, Optional<Long> retentionPeriod) {
             this.id = new VirtualQueueID(hostQueue.queueUrl, queueName);
+            this.hostQueue = hostQueue;
             this.receiveBuffer = new ReceiveQueueBuffer(hostQueue.buffer);
             this.retentionPeriod = retentionPeriod;
             this.expireFuture = Optional.empty();
@@ -234,6 +248,28 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         
         public VirtualQueueID getID() {
             return id;
+        }
+        
+        public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
+            List<String> attributeNames = request.getAttributeNames();
+            boolean includeHostQueue = 
+                    attributeNames.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE) ||
+                    attributeNames.contains("All");
+            boolean includeRetentionPeriod = retentionPeriod.isPresent() && 
+                    (attributeNames.contains(IDLE_QUEUE_RETENTION_PERIOD) ||
+                     attributeNames.contains("All"));
+            
+            GetQueueAttributesRequest hostQueueRequest = new GetQueueAttributesRequest()
+                    .withQueueUrl(hostQueue.queueUrl)
+                    .withAttributeNames(attributeNames);
+            GetQueueAttributesResult result = amazonSqsToBeExtended.getQueueAttributes(hostQueueRequest);
+            if (includeHostQueue) {
+                result.getAttributes().put(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueue.queueUrl);
+            }
+            if (includeRetentionPeriod) {
+                result.getAttributes().put(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriod.get().toString());
+            }
+            return result;
         }
         
         public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
