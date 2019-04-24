@@ -14,6 +14,14 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
  * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
+ * <p>
+ * This client is built on the functionality of the {@link AmazonSQSIdleQueueDeletingClient}
+ * and the {@link AmazonSQSVirtualQueuesClient}, and is intended to be a drop-in replacement
+ * for the AmazonSQS interface in cases where applications need to create many short-lived queues.
+ * <p>
+ * It automatically hosts all queues created with the same set of queue attributes on a single
+ * SQS host queue. Both the host queues and virtual queues will have their "IdleQueueRetentionPeriodSeconds"
+ * attribute set to 5 minutes.
  */
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
