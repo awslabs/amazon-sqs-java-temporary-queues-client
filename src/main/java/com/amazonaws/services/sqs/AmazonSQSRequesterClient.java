@@ -97,7 +97,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         @Override
         protected void accept(Message message) {
             future.complete(message);
-            terminate();
+            super.shutdown();
         }
         
         @Override

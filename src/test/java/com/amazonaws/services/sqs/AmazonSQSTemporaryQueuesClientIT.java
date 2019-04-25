@@ -19,7 +19,11 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     
     @Before
     public void setup() {
-        client = AmazonSQSTemporaryQueuesClient.makeWrappedClient(sqs, queueNamePrefix);
+        AmazonSQSRequesterClientBuilder requesterBuilder =
+                AmazonSQSRequesterClientBuilder.standard()
+                    .withAmazonSQS(sqs)
+                    .withInternalQueuePrefix(queueNamePrefix);
+        client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
     }
     
     @After

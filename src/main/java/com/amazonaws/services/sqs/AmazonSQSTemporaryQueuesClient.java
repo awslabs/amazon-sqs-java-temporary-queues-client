@@ -23,6 +23,9 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
  * SQS host queue. Both the host queues and virtual queues will have their "IdleQueueRetentionPeriodSeconds"
  * attribute set to 5 minutes.
  */
+// TODO-RS: Rename this, as it's not what the AmazonSQSTemporaryQueuesClientBuilder is building!
+// The latter supports creating temporary queues, but this class automatically creates ONLY temporary
+// queues.
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     // TODO-RS: Expose configuration
@@ -36,6 +39,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final String prefix;
 
+    private AmazonSQSRequester requester;
+    
     private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
         super(virtualizer);
         this.virtualizer = virtualizer;
@@ -43,15 +48,37 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         this.prefix = queueNamePrefix + UUID.randomUUID().toString();
     }
 
-    public static AmazonSQSTemporaryQueuesClient makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
-        AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
+    public static AmazonSQSTemporaryQueuesClient make(AmazonSQSRequesterClientBuilder builder) {
+        AmazonSQS sqs = builder.getAmazonSQS().orElseGet(AmazonSQSClientBuilder::defaultClient);
+        AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, builder.getInternalQueuePrefix());
         AmazonSQS virtualizer = new AmazonSQSVirtualQueuesClient(deleter);
-        return new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, queueNamePrefix);
+        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix());
+        AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());
+        AmazonSQSResponderClient responder = new AmazonSQSResponderClient(temporaryQueuesClient);
+        temporaryQueuesClient.startIdleQueueSweeper(requester, responder);
+        if (builder.getAmazonSQS().isPresent()) {
+            requester.setShutdownHook(temporaryQueuesClient::shutdown);
+        } else {
+            requester.setShutdownHook(() -> {
+                temporaryQueuesClient.shutdown();
+                sqs.shutdown();
+            });
+        }
+        return temporaryQueuesClient;
     }
 
     public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder) {
+        this.requester = requester;
         // TODO-RS: Allow configuration of the sweeping period?
         deleter.startSweeper(requester, responder, 5, TimeUnit.MINUTES, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    }
+
+    AmazonSQS getWrappedClient() {
+        return virtualizer;
+    }
+
+    AmazonSQSRequester getRequester() {
+        return requester;
     }
     
     @Override
