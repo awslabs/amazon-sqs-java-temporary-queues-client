@@ -1,18 +1,34 @@
 package com.amazonaws.services.sqs;
 
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+
 public class AmazonSQSTemporaryQueuesClientBuilder {
 
+    private AmazonSQSRequesterClientBuilder requesterBuilder = AmazonSQSRequesterClientBuilder.standard();
+    
     private AmazonSQSTemporaryQueuesClientBuilder() {
     }
-
-    private String queuePrefix = "";
+    
+    public Optional<AmazonSQS> getAmazonSQS() {
+        return requesterBuilder.getAmazonSQS();
+    }
+    
+    public void setAmazonSQS(AmazonSQS sqs) {
+        requesterBuilder.setAmazonSQS(sqs);
+    }
+    
+    public AmazonSQSTemporaryQueuesClientBuilder withAmazonSQS(AmazonSQS sqs) {
+        setAmazonSQS(sqs);
+        return this;
+    }
 
     public String getQueuePrefix() {
-        return queuePrefix;
+        return requesterBuilder.getInternalQueuePrefix();
     }
     
     public void setQueuePrefix(String queuePrefix) {
-        this.queuePrefix = queuePrefix;
+        requesterBuilder.setInternalQueuePrefix(queuePrefix);
     }
     
     public AmazonSQSTemporaryQueuesClientBuilder withQueuePrefix(String queuePrefix) {
@@ -20,6 +36,23 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
         return this;
     }
 
+    public int getIdleQueueSweepingPeriod() {
+        return requesterBuilder.getIdleQueueSweepingPeriod();
+    }
+    
+    public TimeUnit getIdleQueueSweepingTimeUnit() {
+        return requesterBuilder.getIdleQueueSweepingTimeUnit();
+    }
+    
+    public void setIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
+        requesterBuilder.setIdleQueueSweepingPeriod(period, timeUnit);
+    }
+    
+    public AmazonSQSTemporaryQueuesClientBuilder withIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
+        setIdleQueueSweepingPeriod(period, timeUnit);
+        return this;
+    }
+    
     /**
      * @return Create new instance of builder with all defaults set.
      */
@@ -32,8 +65,6 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
     }
     
     public AmazonSQS build() {
-        AmazonSQSRequesterClientBuilder requesterBuilder = AmazonSQSRequesterClientBuilder.standard()
-                .withInternalQueuePrefix(queuePrefix);
         return AmazonSQSTemporaryQueuesClient.make(requesterBuilder).getWrappedClient();
     }
 }

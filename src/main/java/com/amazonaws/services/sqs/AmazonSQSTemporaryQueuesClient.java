@@ -55,7 +55,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix());
         AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());
         AmazonSQSResponderClient responder = new AmazonSQSResponderClient(temporaryQueuesClient);
-        temporaryQueuesClient.startIdleQueueSweeper(requester, responder);
+        temporaryQueuesClient.startIdleQueueSweeper(requester, responder,
+                builder.getIdleQueueSweepingPeriod(), builder.getIdleQueueSweepingTimeUnit());
         if (builder.getAmazonSQS().isPresent()) {
             requester.setShutdownHook(temporaryQueuesClient::shutdown);
         } else {
@@ -67,10 +68,11 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         return temporaryQueuesClient;
     }
 
-    public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder) {
+    public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder, int period, TimeUnit unit) {
         this.requester = requester;
-        // TODO-RS: Allow configuration of the sweeping period?
-        deleter.startSweeper(requester, responder, 5, TimeUnit.MINUTES, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+        if (period > 0) {
+            deleter.startSweeper(requester, responder, period, unit, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+        }
     }
 
     AmazonSQS getWrappedClient() {
