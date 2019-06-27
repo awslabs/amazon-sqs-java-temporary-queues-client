@@ -74,14 +74,18 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
  * attribute configures the length of this period. See the {@link AmazonSQSIdleQueueDeletingClient} class,
  * which implements this concept for physical SQS queues, for more details.
  */
-class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
+public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSVirtualQueuesClient.class);
 
     public static final String VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE = "HostQueueUrl";
     
     // This is just protection against bad logic that creates unbounded queues.
-    public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 10_000;
+    public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 10_000_00;
+	
+	private int concurrentyToPollingQueue = 1;
+	
+    private int waitTimeSeconds = 20;
     
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
     
@@ -100,9 +104,30 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         this(amazonSqsToBeExtended, DEFAULT_ORPHANED_MESSAGE_HANDLER);
     }
 
+	public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, int concurrentyToPollingQueue) {
+        this(amazonSqsToBeExtended, DEFAULT_ORPHANED_MESSAGE_HANDLER, concurrentyToPollingQueue);
+    }
+    
+    public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, int concurrentyToPollingQueue, int waitTimeSeconds) {
+        this(amazonSqsToBeExtended, DEFAULT_ORPHANED_MESSAGE_HANDLER, concurrentyToPollingQueue, waitTimeSeconds);
+    }
+	
     public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler) {
         super(amazonSqsToBeExtended);
         this.orphanedMessageHandler = orphanedMessageHandler;
+    }
+	
+	public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int concurrentyToPollingQueue) {
+        super(amazonSqsToBeExtended);
+        this.orphanedMessageHandler = orphanedMessageHandler;
+        this.concurrentyToPollingQueue = concurrentyToPollingQueue;
+    }
+    
+    public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int concurrentyToPollingQueue, int waitTimeSeconds) {
+        super(amazonSqsToBeExtended);
+        this.orphanedMessageHandler = orphanedMessageHandler;
+        this.concurrentyToPollingQueue = concurrentyToPollingQueue;
+        this.waitTimeSeconds = waitTimeSeconds;
     }
 
     private Optional<VirtualQueue> getVirtualQueue(String queueUrl) {
@@ -137,7 +162,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         }
 
         HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
-        VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
+        VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod, null);
         
         // There is clearly a race condition here between checking the size and
         // adding to the map, but that's fine since this is just a loose upper bound
@@ -149,6 +174,45 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     + MAXIMUM_VIRTUAL_QUEUES_COUNT);
         }
         virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
+        
+        LOG.info(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+        
+        return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
+    }
+    
+    public CreateQueueResult createQueue(CreateQueueRequest request, ISQSMessageHandler messageHandler) {
+        String hostQueueUrl = request.getAttributes().get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        if (hostQueueUrl == null) {
+            return amazonSqsToBeExtended.createQueue(request);
+        }
+
+        Map<String, String> attributes = new HashMap<>(request.getAttributes());
+        attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        
+        Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
+        
+        if (!attributes.isEmpty()) {
+            throw new IllegalArgumentException("Virtual queues do not support setting these queue attributes independently of their host queues: "
+                    + attributes.keySet());
+        }
+
+        HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
+        VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod, messageHandler);
+        
+        // There is clearly a race condition here between checking the size and
+        // adding to the map, but that's fine since this is just a loose upper bound
+        // and it avoids synchronizing all calls on something like an AtomicInteger.
+        // The worse case scenario is that the map has X entries more than the maximum
+        // where X is the number of threads concurrently creating queues.
+        if (virtualQueues.size() > MAXIMUM_VIRTUAL_QUEUES_COUNT) {
+            throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
+                    + MAXIMUM_VIRTUAL_QUEUES_COUNT);
+        }
+
+        virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
+        
+        LOG.info(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+        
         return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
     }
 
@@ -175,9 +239,12 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
+    	
+    	LOG.info(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+    	
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
-                .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
+				.orElseGet(() -> new DeleteQueueResult());
     }
 
     @Override
@@ -235,6 +302,8 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             // wait time on the queue.
             this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
             this.consumer = new SQSMessageConsumer(AmazonSQSVirtualQueuesClient.this, queueUrl, this::dispatchMessage);
+			this.consumer.setConcurrency(AmazonSQSVirtualQueuesClient.this.concurrentyToPollingQueue);
+            this.consumer.setWaitTimeSeconds(AmazonSQSVirtualQueuesClient.this.waitTimeSeconds);
             this.consumer.start();
         }
 
@@ -242,7 +311,13 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             String queueName = message.getMessageAttributes().get(VIRTUAL_QUEUE_NAME_ATTRIBUTE).getStringValue();
             VirtualQueue virtualQueue = virtualQueues.get(queueName);
             if (virtualQueue != null) {
-                virtualQueue.receiveBuffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
+				
+				if ( virtualQueue.messageHandler != null ){
+					virtualQueue.messageHandler.handleMessage(message);
+					virtualQueue.heartbeat();
+				}else{
+					virtualQueue.receiveBuffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
+				}
             } else {
                 orphanedMessageHandler.accept(queueName, message);
             }
@@ -262,13 +337,15 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         private final ReceiveQueueBuffer receiveBuffer;
         private final Optional<Long> retentionPeriod;
         private Optional<ScheduledFuture<?>> expireFuture;
+		private final ISQSMessageHandler messageHandler;
         
-        public VirtualQueue(HostQueue hostQueue, String queueName, Optional<Long> retentionPeriod) {
+        public VirtualQueue(HostQueue hostQueue, String queueName, Optional<Long> retentionPeriod, ISQSMessageHandler messageHandler) {
             this.id = new VirtualQueueID(hostQueue.queueUrl, queueName);
             this.hostQueue = hostQueue;
             this.receiveBuffer = new ReceiveQueueBuffer(hostQueue.buffer);
             this.retentionPeriod = retentionPeriod;
             this.expireFuture = Optional.empty();
+			this.messageHandler = messageHandler;
             heartbeat();
         }
         
