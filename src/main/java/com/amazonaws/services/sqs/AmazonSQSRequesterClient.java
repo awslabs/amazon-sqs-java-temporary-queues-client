@@ -23,26 +23,26 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
  * temporary queue for each response message.
  */
 class AmazonSQSRequesterClient implements AmazonSQSRequester {
-
-    public static final String RESPONSE_QUEUE_URL_ATTRIBUTE_NAME = "ResponseQueueUrl";
-
     private final AmazonSQS sqs;
     private final String queuePrefix;
+    private final String queueUrlAttribute;
+
     private final Map<String, String> queueAttributes;
     private final Consumer<Exception> exceptionHandler;
     
     private final Set<SQSMessageConsumer> responseConsumers = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private Runnable shutdownHook;
-    
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
-        this(sqs, queuePrefix, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, String queueUrlAttribute, Map<String, String> queueAttributes) {
+        this(sqs, queuePrefix, queueUrlAttribute, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, String queueUrlAttribute, Map<String, String> queueAttributes,
                 Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queuePrefix = queuePrefix;
+        this.queueUrlAttribute = queueUrlAttribute;
         this.queueAttributes = new HashMap<>(queueAttributes);
         this.exceptionHandler = exceptionHandler;
     }
@@ -70,7 +70,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         String responseQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest requestWithResponseUrl = SQSQueueUtils.copyWithExtraAttributes(request,
-                Collections.singletonMap(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME, 
+                Collections.singletonMap(queueUrlAttribute,
                         new MessageAttributeValue().withDataType("String").withStringValue(responseQueueUrl)));
         // TODO-RS: Should be using sendMessageAsync
         sqs.sendMessage(requestWithResponseUrl);
