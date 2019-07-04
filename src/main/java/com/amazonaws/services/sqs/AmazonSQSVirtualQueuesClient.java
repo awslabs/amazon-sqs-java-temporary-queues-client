@@ -81,9 +81,9 @@ public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper
     public static final String VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE = "HostQueueUrl";
     
     // This is just protection against bad logic that creates unbounded queues.
-    public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 10_000_00;
+    public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 1_000_000;
 	
-	private int concurrentyToPollingQueue = 1;
+	private int hostQueuePollingThreads = 1;
 	
     private int waitTimeSeconds = 20;
     
@@ -117,16 +117,16 @@ public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper
         this.orphanedMessageHandler = orphanedMessageHandler;
     }
 	
-	public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int concurrentyToPollingQueue) {
+	public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int hostQueuePollingThreads) {
         super(amazonSqsToBeExtended);
         this.orphanedMessageHandler = orphanedMessageHandler;
-        this.concurrentyToPollingQueue = concurrentyToPollingQueue;
+        this.hostQueuePollingThreads = hostQueuePollingThreads;
     }
     
-    public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int concurrentyToPollingQueue, int waitTimeSeconds) {
+    public AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended, BiConsumer<String, Message> orphanedMessageHandler, int hostQueuePollingThreads, int waitTimeSeconds) {
         super(amazonSqsToBeExtended);
         this.orphanedMessageHandler = orphanedMessageHandler;
-        this.concurrentyToPollingQueue = concurrentyToPollingQueue;
+        this.hostQueuePollingThreads = hostQueuePollingThreads;
         this.waitTimeSeconds = waitTimeSeconds;
     }
 
@@ -244,7 +244,7 @@ public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper
     	
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
-				.orElseGet(() -> new DeleteQueueResult());
+                .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
     }
 
     @Override
@@ -301,8 +301,7 @@ public class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper
             // Used to avoid repeatedly fetching the default visibility timeout and receive message
             // wait time on the queue.
             this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
-            this.consumer = new SQSMessageConsumer(AmazonSQSVirtualQueuesClient.this, queueUrl, this::dispatchMessage);
-			this.consumer.setConcurrency(AmazonSQSVirtualQueuesClient.this.concurrentyToPollingQueue);
+            this.consumer = new SQSMessageConsumer(AmazonSQSVirtualQueuesClient.this, queueUrl, this::dispatchMessage, hostQueuePollingThreads);
             this.consumer.setWaitTimeSeconds(AmazonSQSVirtualQueuesClient.this.waitTimeSeconds);
             this.consumer.start();
         }

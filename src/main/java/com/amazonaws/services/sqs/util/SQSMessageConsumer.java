@@ -43,13 +43,17 @@ public class SQSMessageConsumer implements AutoCloseable {
 	
 	protected int waitTimeSeconds = 20;
     
-    protected int concurrency = 1;
+    protected int pollingThreadCount = 1;
 
     private static final ExecutorService executor = Executors.newCachedThreadPool(
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
         this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    }
+    
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer, int pollingThreadCount) {
+        this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER, pollingThreadCount);
     }
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
@@ -60,17 +64,23 @@ public class SQSMessageConsumer implements AutoCloseable {
         this.shutdownHook = shutdownHook;
         this.exceptionHandler = exceptionHandler;
     }
+    
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+            Runnable shutdownHook, Consumer<Exception> exceptionHandler, int pollingThreadCount) {
+        this.sqs = sqs;
+        this.queueUrl = queueUrl;
+        this.consumer = consumer;
+        this.shutdownHook = shutdownHook;
+        this.exceptionHandler = exceptionHandler;
+        this.pollingThreadCount = pollingThreadCount;
+    }
 	
 	public void setWaitTimeSeconds(int waitTimeSeconds) {
 		this.waitTimeSeconds = waitTimeSeconds;
 	}
-
-	public void setConcurrency(int concurrency) {
-		this.concurrency = concurrency;
-	}
 	
     public void start() {
-        for ( int i = 0; i < this.concurrency; i++ ) {
+        for ( int i = 0; i < this.pollingThreadCount; i++ ) {
     		executor.execute(this::poll);
         }
     }
