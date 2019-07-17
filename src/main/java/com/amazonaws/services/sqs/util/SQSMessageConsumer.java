@@ -10,9 +10,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
@@ -43,12 +40,20 @@ public class SQSMessageConsumer implements AutoCloseable {
     // complete so they can be put back on the queue, but isShutdown() should
     // be true in the meantime.
     protected long deadlineNanos = -1;
+	
+	protected int waitTimeSeconds = 20;
+    
+    protected int pollingThreadCount = 1;
 
     private static final ExecutorService executor = Executors.newCachedThreadPool(
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
         this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    }
+    
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer, int pollingThreadCount) {
+        this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER, pollingThreadCount);
     }
 
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
@@ -59,9 +64,25 @@ public class SQSMessageConsumer implements AutoCloseable {
         this.shutdownHook = shutdownHook;
         this.exceptionHandler = exceptionHandler;
     }
-
+    
+    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+            Runnable shutdownHook, Consumer<Exception> exceptionHandler, int pollingThreadCount) {
+        this.sqs = sqs;
+        this.queueUrl = queueUrl;
+        this.consumer = consumer;
+        this.shutdownHook = shutdownHook;
+        this.exceptionHandler = exceptionHandler;
+        this.pollingThreadCount = pollingThreadCount;
+    }
+	
+	public void setWaitTimeSeconds(int waitTimeSeconds) {
+		this.waitTimeSeconds = waitTimeSeconds;
+	}
+	
     public void start() {
-        executor.execute(this::poll);
+        for ( int i = 0; i < this.pollingThreadCount; i++ ) {
+    		executor.execute(this::poll);
+        }
     }
 
     public void runFor(long timeout, TimeUnit unit) {
@@ -76,7 +97,6 @@ public class SQSMessageConsumer implements AutoCloseable {
                     break;
                 }
     
-                int waitTimeSeconds = 20;
                 if (deadlineNanos > 0) {
                     long currentNanos = System.nanoTime();
                     if (currentNanos >= deadlineNanos) {
