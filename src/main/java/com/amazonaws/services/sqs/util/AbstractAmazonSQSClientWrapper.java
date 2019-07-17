@@ -46,6 +46,8 @@ import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.util.VersionInfoUtils;
 
+import java.util.Objects;
+
 public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
 
     protected final AmazonSQS amazonSqsToBeExtended;
@@ -53,7 +55,7 @@ public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
     protected final String userAgent;
 
     public AbstractAmazonSQSClientWrapper(AmazonSQS amazonSqsToBeExtended) {
-        this.amazonSqsToBeExtended = amazonSqsToBeExtended;
+        this.amazonSqsToBeExtended = Objects.requireNonNull(amazonSqsToBeExtended);
         this.userAgent = getClass().getSimpleName() + "/" + VersionInfoUtils.getVersion();
     }
 

@@ -51,7 +51,7 @@ public class AmazonSQSResponderClientBuilder {
     public AmazonSQSResponder build() {
         AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
         AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix);
-        AmazonSQS virtualQueuesClient = new AmazonSQSVirtualQueuesClient(deleter);
+        AmazonSQS virtualQueuesClient = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter).build();
         return new AmazonSQSResponderClient(virtualQueuesClient);
     }
 }

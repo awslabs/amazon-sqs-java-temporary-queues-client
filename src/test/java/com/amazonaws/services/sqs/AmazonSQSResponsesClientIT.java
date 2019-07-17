@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,10 +39,14 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
 
     @Test
     public void test() throws Exception {
-        SQSMessageConsumer consumer = new SQSMessageConsumer(sqs, requestQueueUrl, message -> {
-            sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
-                    new MessageContent("Right back atcha buddy!"));
-        });
+        SQSMessageConsumer consumer = SQSMessageConsumerBuilder.standard()
+                .withAmazonSQS(sqs)
+                .withQueueUrl(requestQueueUrl)
+                .withConsumer(message -> {
+                    sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
+                            new MessageContent("Right back atcha buddy!"));
+                })
+                .build();
         consumer.start();
         try {
             SendMessageRequest request = new SendMessageRequest()
