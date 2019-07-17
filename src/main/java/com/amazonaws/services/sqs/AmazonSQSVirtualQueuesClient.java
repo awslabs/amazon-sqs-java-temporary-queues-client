@@ -83,9 +83,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     // This is just protection against bad logic that creates unbounded queues.
     public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 1_000_000;
-	
-	private final int hostQueuePollingThreads;
-	
+
+    private final int hostQueuePollingThreads;
+
     private final int maxWaitTimeSeconds;
     
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
@@ -186,9 +186,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-    	
-    	LOG.info(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
-    	
+
+        LOG.info(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
                 .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
@@ -268,9 +268,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     virtualQueue.heartbeat();
                     return null;
                 }).orElseGet(() -> {
-					virtualQueue.receiveBuffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
-					return null;
-				});
+                    virtualQueue.receiveBuffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
+                    return null;
+                });
             } else {
                 orphanedMessageHandler.accept(queueName, message);
             }
