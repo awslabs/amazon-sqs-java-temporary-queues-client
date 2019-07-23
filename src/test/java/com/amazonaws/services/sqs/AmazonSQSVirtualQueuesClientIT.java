@@ -3,6 +3,7 @@ package com.amazonaws.services.sqs;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
@@ -17,11 +18,11 @@ import com.amazonaws.services.sqs.util.IntegrationTest;
 public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     
     private static String hostQueueUrl;
-    private static AmazonSQSVirtualQueuesClient client;
+    private static AmazonSQS client;
 
     @Before
     public void setup() {
-        client = new AmazonSQSVirtualQueuesClient(sqs);
+        client = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(sqs).build();
         hostQueueUrl = client.createQueue(queueNamePrefix + "-HostQueue").getQueueUrl();
     }
 

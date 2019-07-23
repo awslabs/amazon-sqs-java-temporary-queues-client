@@ -5,6 +5,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -121,7 +122,12 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         SQSMessageConsumer messageConsumer;
         
         public void start() {
-            messageConsumer = new SQSMessageConsumer(client, queueUrl, this::receiveMessage, () -> {}, exceptionHandler);
+            messageConsumer = SQSMessageConsumerBuilder.standard()
+                                                       .withAmazonSQS(client)
+                                                       .withQueueUrl(queueUrl)
+                                                       .withConsumer(this::receiveMessage)
+                                                       .withExceptionHandler(exceptionHandler)
+                                                       .build();
             messageConsumer.start();
             executor.scheduleAtFixedRate(this::sendMessage, 0, 1, TimeUnit.SECONDS);
         }

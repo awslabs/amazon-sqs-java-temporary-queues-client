@@ -36,6 +36,7 @@ import com.amazonaws.services.sqs.executors.SerializableRunnable;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 import com.amazonaws.util.BinaryUtils;
 import com.amazonaws.util.Md5Utils;
@@ -69,7 +70,12 @@ class SQSExecutorService extends AbstractExecutorService {
         this.sqsRequester = sqsRequester;
         this.sqsResponder = sqsResponder;
         this.queueUrl = queueUrl;
-        this.messageConsumer = new SQSMessageConsumer(this.sqs, queueUrl, this::accept, () -> {}, exceptionHandler);
+        this.messageConsumer = SQSMessageConsumerBuilder.standard()
+                                                        .withAmazonSQS(this.sqs)
+                                                        .withQueueUrl(queueUrl)
+                                                        .withConsumer(this::accept)
+                                                        .withExceptionHandler(exceptionHandler)
+                                                        .build();
         this.messageConsumer.start();
         this.serializer = serializer;
     }

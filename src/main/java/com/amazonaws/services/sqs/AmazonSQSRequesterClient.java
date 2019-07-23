@@ -90,14 +90,15 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         private final CompletableFuture<Message> future;
         
         public ResponseListener(String queueUrl, CompletableFuture<Message> future) {
-            super(AmazonSQSRequesterClient.this.sqs, queueUrl, null, null, AmazonSQSRequesterClient.this.exceptionHandler);
+            // TODO-RS: Rethink this to avoid subclassing a class that now has a proper builder.
+            super(AmazonSQSRequesterClient.this.sqs, queueUrl, message -> {}, null, AmazonSQSRequesterClient.this.exceptionHandler);
             this.future = future;
         }
         
         @Override
         protected void accept(Message message) {
             future.complete(message);
-            terminate();
+            super.shutdown();
         }
         
         @Override

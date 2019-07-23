@@ -48,6 +48,19 @@ import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
+/**
+ * An AmazonSQS wrapper that adds automatically deletes unused queues after a configurable
+ * period of inactivity.
+ * <p>
+ * This client monitors all queues created with the "IdleQueueRetentionPeriodSeconds" queue
+ * attribute. Such queues must have names that begin with the prefix provided in the constructor,
+ * as this client uses {@link #listQueues(ListQueuesRequest)} to sweep them.
+ * <p>
+ * This client uses a heartbeating mechanism based on queue tags. Making API calls to queues
+ * through this client causes tags on those queues to be refreshed every 5 seconds. If the process
+ * using a client shuts down uncleanly, other client instances using the same queue prefix will
+ * detect that its queue(s) are idle and delete them.
+ */
 class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);

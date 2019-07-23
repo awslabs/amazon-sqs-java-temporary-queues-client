@@ -14,7 +14,18 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
  * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
+ * <p>
+ * This client is built on the functionality of the {@link AmazonSQSIdleQueueDeletingClient}
+ * and the {@link AmazonSQSVirtualQueuesClient}, and is intended to be a drop-in replacement
+ * for the AmazonSQS interface in cases where applications need to create many short-lived queues.
+ * <p>
+ * It automatically hosts all queues created with the same set of queue attributes on a single
+ * SQS host queue. Both the host queues and virtual queues will have their "IdleQueueRetentionPeriodSeconds"
+ * attribute set to 5 minutes.
  */
+// TODO-RS: Rename this, as it's not what the AmazonSQSTemporaryQueuesClientBuilder is building!
+// The latter supports creating temporary queues, but this class automatically creates ONLY temporary
+// queues.
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     // TODO-RS: Expose configuration
@@ -28,6 +39,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final String prefix;
 
+    private AmazonSQSRequester requester;
+    
     private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
         super(virtualizer);
         this.virtualizer = virtualizer;
@@ -35,15 +48,39 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         this.prefix = queueNamePrefix + UUID.randomUUID().toString();
     }
 
-    public static AmazonSQSTemporaryQueuesClient makeWrappedClient(AmazonSQS sqs, String queueNamePrefix) {
-        AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
-        AmazonSQS virtualizer = new AmazonSQSVirtualQueuesClient(deleter);
-        return new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, queueNamePrefix);
+    public static AmazonSQSTemporaryQueuesClient make(AmazonSQSRequesterClientBuilder builder) {
+        AmazonSQS sqs = builder.getAmazonSQS().orElseGet(AmazonSQSClientBuilder::defaultClient);
+        AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, builder.getInternalQueuePrefix());
+        AmazonSQS virtualizer = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter).build();
+        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix());
+        AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());
+        AmazonSQSResponderClient responder = new AmazonSQSResponderClient(temporaryQueuesClient);
+        temporaryQueuesClient.startIdleQueueSweeper(requester, responder,
+                builder.getIdleQueueSweepingPeriod(), builder.getIdleQueueSweepingTimeUnit());
+        if (builder.getAmazonSQS().isPresent()) {
+            requester.setShutdownHook(temporaryQueuesClient::shutdown);
+        } else {
+            requester.setShutdownHook(() -> {
+                temporaryQueuesClient.shutdown();
+                sqs.shutdown();
+            });
+        }
+        return temporaryQueuesClient;
     }
 
-    public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder) {
-        // TODO-RS: Allow configuration of the sweeping period?
-        deleter.startSweeper(requester, responder, 5, TimeUnit.MINUTES, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    public void startIdleQueueSweeper(AmazonSQSRequesterClient requester, AmazonSQSResponderClient responder, int period, TimeUnit unit) {
+        this.requester = requester;
+        if (period > 0) {
+            deleter.startSweeper(requester, responder, period, unit, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+        }
+    }
+
+    AmazonSQS getWrappedClient() {
+        return virtualizer;
+    }
+
+    AmazonSQSRequester getRequester() {
+        return requester;
     }
     
     @Override

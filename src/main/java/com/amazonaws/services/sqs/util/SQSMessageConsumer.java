@@ -3,15 +3,13 @@ package com.amazonaws.services.sqs.util;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.ATTRIBUTE_NAMES_ALL;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
@@ -44,24 +42,46 @@ public class SQSMessageConsumer implements AutoCloseable {
     // be true in the meantime.
     protected long deadlineNanos = -1;
 
+    protected int maxWaitTimeSeconds;
+    
+    protected final int pollingThreadCount;
+
     private static final ExecutorService executor = Executors.newCachedThreadPool(
             new DaemonThreadFactory(SQSMessageConsumer.class.getSimpleName()));
 
+    /**
+     * @deprecated Please use {@link SQSMessageConsumerBuilder} instead.
+     */
+    @Deprecated
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
         this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
+    /**
+     * @deprecated Please use {@link SQSMessageConsumerBuilder} instead.
+     */
+    @Deprecated
     public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
-            Runnable shutdownHook, Consumer<Exception> exceptionHandler) {
-        this.sqs = sqs;
-        this.queueUrl = queueUrl;
-        this.consumer = consumer;
-        this.shutdownHook = shutdownHook;
-        this.exceptionHandler = exceptionHandler;
+                              Runnable shutdownHook, Consumer<Exception> exceptionHandler) {
+        this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER, 20, 1);
+    }
+    
+    SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+                       Runnable shutdownHook, Consumer<Exception> exceptionHandler,
+                       int maxWaitTimeSeconds, int pollingThreadCount) {
+        this.sqs = Objects.requireNonNull(sqs);
+        this.queueUrl = Objects.requireNonNull(queueUrl);
+        this.consumer = Objects.requireNonNull(consumer);
+        this.shutdownHook = Objects.requireNonNull(shutdownHook);
+        this.exceptionHandler = Objects.requireNonNull(exceptionHandler);
+        this.maxWaitTimeSeconds = maxWaitTimeSeconds;
+        this.pollingThreadCount = pollingThreadCount;
     }
 
     public void start() {
-        executor.execute(this::poll);
+        for ( int i = 0; i < this.pollingThreadCount; i++ ) {
+            executor.execute(this::poll);
+        }
     }
 
     public void runFor(long timeout, TimeUnit unit) {
@@ -75,8 +95,8 @@ public class SQSMessageConsumer implements AutoCloseable {
                 if (Thread.interrupted() || shuttingDown.get()) {
                     break;
                 }
-    
-                int waitTimeSeconds = 20;
+
+                int waitTimeSeconds = maxWaitTimeSeconds;
                 if (deadlineNanos > 0) {
                     long currentNanos = System.nanoTime();
                     if (currentNanos >= deadlineNanos) {
@@ -84,7 +104,7 @@ public class SQSMessageConsumer implements AutoCloseable {
                         break;
                     } else {
                         int secondsRemaining = (int)TimeUnit.NANOSECONDS.toSeconds(deadlineNanos - currentNanos);
-                        waitTimeSeconds = Math.max(0, Math.min(20, secondsRemaining));
+                        waitTimeSeconds = Math.max(0, Math.min(maxWaitTimeSeconds, secondsRemaining));
                     }
                 }
     

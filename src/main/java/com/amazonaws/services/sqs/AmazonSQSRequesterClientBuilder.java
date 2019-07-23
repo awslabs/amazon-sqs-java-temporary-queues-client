@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSRequesterClientBuilder {
     
@@ -12,6 +13,9 @@ public class AmazonSQSRequesterClientBuilder {
     private String internalQueuePrefix = "__RequesterClientQueues__";
     
     private Map<String, String> queueAttributes = Collections.emptyMap();
+    
+    private int idleQueueSweepingPeriod = 5;
+    private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     
     private AmazonSQSRequesterClientBuilder() {
     }
@@ -66,20 +70,25 @@ public class AmazonSQSRequesterClientBuilder {
         return this;
     }
 
+    public int getIdleQueueSweepingPeriod() {
+        return idleQueueSweepingPeriod;
+    }
+    
+    public TimeUnit getIdleQueueSweepingTimeUnit() {
+        return idleQueueSweepingTimeUnit;
+    }
+    
+    public void setIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
+        this.idleQueueSweepingPeriod = period;
+        this.idleQueueSweepingTimeUnit = timeUnit;
+    }
+    
+    public AmazonSQSRequesterClientBuilder withIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
+        setIdleQueueSweepingPeriod(period, timeUnit);
+        return this;
+    }
+    
     public AmazonSQSRequester build() {
-        AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
-        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = AmazonSQSTemporaryQueuesClient.makeWrappedClient(sqs, internalQueuePrefix);
-        AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, internalQueuePrefix, queueAttributes);
-        AmazonSQSResponderClient responder = new AmazonSQSResponderClient(sqs);
-        temporaryQueuesClient.startIdleQueueSweeper(requester, responder);
-        if (customSQS.isPresent()) {
-            requester.setShutdownHook(temporaryQueuesClient::shutdown);
-        } else {
-            requester.setShutdownHook(() -> {
-                temporaryQueuesClient.shutdown();
-                sqs.shutdown();
-            });
-        }
-        return requester;
+        return AmazonSQSTemporaryQueuesClient.make(this).getRequester();
     }
 }
