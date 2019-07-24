@@ -115,6 +115,13 @@
             <goals>
               <goal>jar</goal>
             </goals>
+            <configuration>
+              <!--
+              TODO-RS: Java 8 is more strict about some javadoc tags.
+              We'll need to update quite a few to remove this workaround.
+              -->
+              <additionalparam>-Xdoclint:none</additionalparam>
+            </configuration>
           </execution>
         </executions>
       </plugin>
