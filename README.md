@@ -17,25 +17,22 @@ By default, these internal queues are created with the queue name prefix `"__Req
 [building](./src/main/java/com/amazonaws/services/sqs/AmazonSQSRequesterClientBuilder.java)
 the requester client.
 
-This library is currently in developer preview and we look forward to community feedback and collaboration! The internal components used to implement the
-Request/Response interfaces have other applications, and we plan to make more of them accessible for other use cases in the future.
-
 ## Getting Started
 
 * **Sign up for AWS** -- Before you begin, you need an AWS account. For more information about creating an AWS account and retrieving your AWS credentials, see [AWS Account and Credentials](http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html) in the AWS SDK for Java Developer Guide.
 * **Sign up for Amazon SQS** -- Go to the Amazon [SQS console](https://console.aws.amazon.com/sqs/home?region=us-east-1) to sign up for the service.
 * **Minimum requirements** -- To use this client, you'll need Java 8 (or later) and [Maven 3](http://maven.apache.org/).
-* **Download** -- Download the [latest preview release](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/releases) or pick it up from Maven:
+* **Download** -- Download the [latest release](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/releases) or pick it up from Maven:
 ```xml
   <dependency>
     <groupId>com.amazonaws</groupId>
     <artifactId>amazon-sqs-java-temporary-queues-client</artifactId>
-    <version>0.10.0</version>
+    <version>1.0.0</version>
     <type>jar</type>
   </dependency>
 ```
 * **Samples** -- Sample code using this library is available [here](https://github.com/aws-samples/amazon-sqs-java-temporary-queues-client-samples).
-* **Further information** - Read the [API documentation](http://aws.amazon.com/documentation/sqs/).
+* **Further information** - Read the [documentation](http://aws.amazon.com/documentation/sqs/).
 
 ## Feedback
 * Give us feedback [here](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/issues).
