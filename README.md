@@ -32,7 +32,7 @@ the requester client.
   </dependency>
 ```
 * **Samples** -- Sample code using this library is available [here](https://github.com/aws-samples/amazon-sqs-java-temporary-queues-client-samples).
-* **Further information** - Read the [documentation](http://aws.amazon.com/documentation/sqs/).
+* **Further information** - Read the [documentation](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-temporary-queues.html).
 
 ## Feedback
 * Give us feedback [here](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/issues).
