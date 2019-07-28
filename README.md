@@ -22,7 +22,6 @@ Temporary queues are also automatically deleted if the clients that created them
     <groupId>com.amazonaws</groupId>
     <artifactId>amazon-sqs-java-temporary-queues-client</artifactId>
     <version>1.0.0</version>
-    <type>jar</type>
   </dependency>
 ```
 5. [Explore the code examples](https://github.com/aws-samples/amazon-sqs-java-temporary-queues-client-samples).
