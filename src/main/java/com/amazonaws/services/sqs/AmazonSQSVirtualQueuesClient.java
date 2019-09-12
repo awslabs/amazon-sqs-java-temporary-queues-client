@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
@@ -99,8 +100,20 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final Optional<BiConsumer<String, Message>> messageHandlerOptional;
     private final BiConsumer<String, Message> orphanedMessageHandler;
-    
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+    // Used to delete idle virtual queues.
+    private final ScheduledExecutorService executor = createIdleQueueDeletionExecutor();
+
+    private static ScheduledExecutorService createIdleQueueDeletionExecutor() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+        // Since we are cancelling and resubmitting a task on every heartbeat,
+        // without this setting the size of the work queue will depend on the number of
+        // heartbeat calls made within the retention period, and hence on the TPS made to
+        // the queue. That can lead to increased memory pressure, possibly even exhausting
+        // memory.
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
 
     AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended,
                                  Optional<BiConsumer<String, Message>> messageHandlerOptional,

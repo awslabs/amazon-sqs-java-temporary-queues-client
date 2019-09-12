@@ -105,4 +105,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         virtualizer.shutdown();
         deleter.shutdown();
     }
+
+    public void teardown() {
+        deleter.teardown();
+    }
 }

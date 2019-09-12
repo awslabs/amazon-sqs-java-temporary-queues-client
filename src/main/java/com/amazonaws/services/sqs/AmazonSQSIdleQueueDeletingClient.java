@@ -13,6 +13,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.sqs.model.QueueNameExistsException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -73,6 +74,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
+    private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
 
     static final String LAST_HEARTBEAT_TIMESTAMP_TAG = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
 
@@ -98,6 +100,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     private final Map<String, QueueMetadata> queues = new ConcurrentHashMap<>();
 
     private IdleQueueSweeper idleQueueSweeper;
+    private String deadLetterQueueUrl;
 
     public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
         super(sqs);
@@ -114,18 +117,39 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         if (this.idleQueueSweeper != null) {
             throw new IllegalStateException("Idle queue sweeper is already started!");
         }
-        
+
+        // Create the DLQ first so the primary queue can reference it
+        deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, Collections.emptyMap());
+        String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
+                Collections.singletonList(QueueAttributeName.QueueArn.name()))
+                        .getAttributes().get(QueueAttributeName.QueueArn.name());
+
+        Map<String, String> queueAttributes = new HashMap<>();
+        // Server-side encryption is important here because we're putting
+        // queue URLs into this queue.
+        queueAttributes.put(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
+        queueAttributes.put(QueueAttributeName.RedrivePolicy.toString(),
+                "{\"maxReceiveCount\":\"5\", \"deadLetterTargetArn\":\"" + deadLetterQueueArn + "\"}");
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix)
-                // Server-side encryption is important here because we're putting
-                // queue URLs into this queue.
-                .addAttributesEntry(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        String sweepingQueueUrl = super.createQueue(request).getQueueUrl();
+        String sweepingQueueUrl = createOrUpdateQueue(queueNamePrefix, queueAttributes);
 
         this.idleQueueSweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix,
                 period, unit, exceptionHandler);
+    }
+
+    private String createOrUpdateQueue(String name, Map<String, String> attributes) {
+        try {
+            return super.createQueue(new CreateQueueRequest()
+                    .withQueueName(name)
+                    .withAttributes(attributes)).getQueueUrl();
+        } catch (QueueNameExistsException e) {
+            String queueUrl = super.getQueueUrl(name).getQueueUrl();
+            super.setQueueAttributes(new SetQueueAttributesRequest()
+                    .withQueueUrl(queueUrl)
+                    .withAttributes(attributes));
+            return queueUrl;
+        }
     }
 
     @Override
@@ -422,6 +446,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         shutdown();
         if (idleQueueSweeper != null) {
             amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+            amazonSqsToBeExtended.deleteQueue(deadLetterQueueUrl);
         }
     }
 }
