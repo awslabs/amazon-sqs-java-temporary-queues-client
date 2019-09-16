@@ -170,8 +170,10 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     + MAXIMUM_VIRTUAL_QUEUES_COUNT);
         }
         virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
-        
-        LOG.info(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+        }
         
         return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
     }
@@ -200,7 +202,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
 
-        LOG.info(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+        }
 
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
