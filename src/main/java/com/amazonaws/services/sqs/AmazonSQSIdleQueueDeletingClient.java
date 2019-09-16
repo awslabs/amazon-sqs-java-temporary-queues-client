@@ -119,17 +119,17 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
 
         // Create the DLQ first so the primary queue can reference it
-        deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, Collections.emptyMap());
-        String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
-                Collections.singletonList(QueueAttributeName.QueueArn.name()))
-                        .getAttributes().get(QueueAttributeName.QueueArn.name());
+//        deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, Collections.emptyMap());
+//        String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
+//                Collections.singletonList(QueueAttributeName.QueueArn.name()))
+//                        .getAttributes().get(QueueAttributeName.QueueArn.name());
 
         Map<String, String> queueAttributes = new HashMap<>();
         // Server-side encryption is important here because we're putting
         // queue URLs into this queue.
         queueAttributes.put(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        queueAttributes.put(QueueAttributeName.RedrivePolicy.toString(),
-                "{\"maxReceiveCount\":\"5\", \"deadLetterTargetArn\":\"" + deadLetterQueueArn + "\"}");
+//        queueAttributes.put(QueueAttributeName.RedrivePolicy.toString(),
+//                "{\"maxReceiveCount\":\"5\", \"deadLetterTargetArn\":\"" + deadLetterQueueArn + "\"}");
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
         String sweepingQueueUrl = createOrUpdateQueue(queueNamePrefix, queueAttributes);
