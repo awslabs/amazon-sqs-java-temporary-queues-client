@@ -24,6 +24,8 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 @SuppressWarnings("squid:S2055") // SonarLint exception for the custom serialization approach.
 class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializable {
 
+    private static final long serialVersionUID = 27151245504960185L;
+
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
     
     private final SerializableReference<IdleQueueSweeper> thisReference;
