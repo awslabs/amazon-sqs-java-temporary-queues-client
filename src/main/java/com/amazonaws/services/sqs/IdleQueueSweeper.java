@@ -13,6 +13,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.sqs.util.ServiceLatencyTimer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -49,17 +50,19 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     protected void checkQueuesForIdleness(String prefix) {
         LOG.info("Checking all queues begining with prefix " + prefix + " for idleness");
-        
-        try {
-            forEachQueue(this, serializable(p -> sqs.listQueues(p).getQueueUrls()), prefix,
-                    SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>)this::checkQueueForIdleness);
-        } catch (RejectedExecutionException e) {
-            // Already shutting down, ignore
-        } catch (Exception e) {
-            // Make sure the recurring task never throws so it doesn't terminate.
-            String message = "Encounted error when checking queues for idleness (prefix = " + prefix + ")";
-            exceptionHandler.accept(new RuntimeException(message, e));
-        }
+
+        ServiceLatencyTimer.withTiming("SQS Idle Queue Sweeper", "Sweep", () -> {
+            try {
+                forEachQueue(this, serializable(p -> sqs.listQueues(p).getQueueUrls()), prefix,
+                        SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>) this::checkQueueForIdleness);
+            } catch (RejectedExecutionException e) {
+                // Already shutting down, ignore
+            } catch (Exception e) {
+                // Make sure the recurring task never throws so it doesn't terminate.
+                String message = "Encounted error when checking queues for idleness (prefix = " + prefix + ")";
+                exceptionHandler.accept(new RuntimeException(message, e));
+            }
+        }).run();
     }
 
     protected void checkQueueForIdleness(String queueUrl) {
