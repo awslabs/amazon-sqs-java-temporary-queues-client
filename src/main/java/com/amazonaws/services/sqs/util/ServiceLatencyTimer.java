@@ -3,7 +3,7 @@ package com.amazonaws.services.sqs.util;
 import com.amazonaws.metrics.AwsSdkMetrics;
 import com.amazonaws.metrics.ServiceLatencyProvider;
 import com.amazonaws.metrics.ServiceMetricType;
-import com.amazonaws.metrics.SimpleServiceMetricType
+import com.amazonaws.metrics.SimpleServiceMetricType;
 
 import java.util.function.Supplier;
 
