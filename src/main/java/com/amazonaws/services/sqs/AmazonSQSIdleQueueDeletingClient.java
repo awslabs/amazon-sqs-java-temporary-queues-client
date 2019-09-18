@@ -446,6 +446,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         shutdown();
         if (idleQueueSweeper != null) {
             amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+        }
+        if (deadLetterQueueUrl != null) {
             amazonSqsToBeExtended.deleteQueue(deadLetterQueueUrl);
         }
     }

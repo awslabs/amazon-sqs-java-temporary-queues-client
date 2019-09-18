@@ -121,6 +121,12 @@ public class ReceiveQueueBuffer {
     public void shutdown() {
         shutDown = true;
         clear();
+        waitTimer.shutdown();
+        try {
+            waitTimer.awaitTermination(20, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
