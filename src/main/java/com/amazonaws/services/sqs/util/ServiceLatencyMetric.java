@@ -8,7 +8,9 @@ import java.util.Arrays;
 import java.util.function.Supplier;
 
 public enum ServiceLatencyMetric implements ServiceMetricType {
-    IdleQueueSweep, CheckQueueForIdleness, DeleteIdleQueue, Exception;
+    IdleQueueSweep, CheckQueueForIdleness, DeleteIdleQueue,
+    CreateVirtualQueue, DeleteVirtualQueue,
+    Exception;
 
     static {
         AwsSdkMetrics.addAll(Arrays.asList(ServiceLatencyMetric.values()));
