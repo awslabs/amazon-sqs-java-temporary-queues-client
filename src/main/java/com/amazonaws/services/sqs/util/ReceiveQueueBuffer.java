@@ -62,7 +62,7 @@ public class ReceiveQueueBuffer {
 
     private static final Queue<Message> EMPTY_DEQUE = new ArrayDeque<>();
 
-    private final ScheduledExecutorService waitTimer = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService waitTimer;
 
     private final AmazonSQS sqsClient;
 
@@ -92,8 +92,10 @@ public class ReceiveQueueBuffer {
     /** finished batches are stored in this list. */
     protected LinkedList<ReceiveMessageBatchTask> finishedTasks = new LinkedList<>();
 
-    public ReceiveQueueBuffer(AmazonSQS paramSQS, String queueUrl) {
-        sqsClient = paramSQS;
+    public ReceiveQueueBuffer(AmazonSQS sqsClient, ScheduledExecutorService waitTimer, String queueUrl) {
+        this.sqsClient = sqsClient;
+        this.waitTimer = waitTimer;
+
         if (queueUrl.endsWith(".fifo")) {
             throw new IllegalArgumentException("FIFO queues are not yet supported: " + queueUrl);
         }
@@ -111,6 +113,7 @@ public class ReceiveQueueBuffer {
 
     public ReceiveQueueBuffer(ReceiveQueueBuffer other) {
         this.sqsClient = other.sqsClient;
+        this.waitTimer = other.waitTimer;
         this.defaultWaitTimeNanos = other.defaultWaitTimeNanos;
         this.defaultVisibilityTimeoutNanos = other.defaultVisibilityTimeoutNanos;
     }
@@ -121,12 +124,6 @@ public class ReceiveQueueBuffer {
     public void shutdown() {
         shutDown = true;
         clear();
-        waitTimer.shutdown();
-        try {
-            waitTimer.awaitTermination(20, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     /**

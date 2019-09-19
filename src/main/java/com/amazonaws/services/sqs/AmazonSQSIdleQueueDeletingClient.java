@@ -88,7 +88,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         private QueueMetadata(String name, String queueUrl, Map<String, String> attributes) {
             this.name = name;
             this.attributes = attributes;
-            this.buffer = new ReceiveQueueBuffer(AmazonSQSIdleQueueDeletingClient.this, queueUrl);
+            this.buffer = new ReceiveQueueBuffer(AmazonSQSIdleQueueDeletingClient.this, executor, queueUrl);
         }
     }
 

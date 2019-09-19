@@ -24,6 +24,7 @@ import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
@@ -90,7 +91,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     private final int hostQueuePollingThreads;
 
     private final int maxWaitTimeSeconds;
-    
+
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
 
     static final BiConsumer<String, Message> DEFAULT_ORPHANED_MESSAGE_HANDLER = (queueName, message) -> {
@@ -107,7 +108,8 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     private final ScheduledExecutorService executor = createIdleQueueDeletionExecutor();
 
     private static ScheduledExecutorService createIdleQueueDeletionExecutor() {
-        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1,
+                new DaemonThreadFactory("AmazonSQSVirtualQueuesClient"));
         // Since we are cancelling and resubmitting a task on every heartbeat,
         // without this setting the size of the work queue will depend on the number of
         // heartbeat calls made within the retention period, and hence on the TPS made to
@@ -270,7 +272,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             this.queueUrl = queueUrl;
             // Used to avoid repeatedly fetching the default visibility timeout and receive message
             // wait time on the queue.
-            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
+            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, executor, queueUrl);
 
             this.consumer = SQSMessageConsumerBuilder.standard()
                                                      .withAmazonSQS(AmazonSQSVirtualQueuesClient.this)
