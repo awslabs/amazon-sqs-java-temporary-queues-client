@@ -50,8 +50,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
 import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
-import static com.amazonaws.services.sqs.util.ServiceLatencyMetric.CreateVirtualQueue;
-import static com.amazonaws.services.sqs.util.ServiceLatencyMetric.DeleteVirtualQueue;
 
 /**
  * An AmazonSQS wrapper that adds support for "virtual" queues, which are logical
@@ -146,42 +144,40 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
-        return CreateVirtualQueue.measureLatency(() -> {
-            String hostQueueUrl = request.getAttributes().get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
-            if (hostQueueUrl == null) {
-                return amazonSqsToBeExtended.createQueue(request);
-            }
+        String hostQueueUrl = request.getAttributes().get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        if (hostQueueUrl == null) {
+            return amazonSqsToBeExtended.createQueue(request);
+        }
 
-            Map<String, String> attributes = new HashMap<>(request.getAttributes());
-            attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        Map<String, String> attributes = new HashMap<>(request.getAttributes());
+        attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
 
-            Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
+        Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
 
-            if (!attributes.isEmpty()) {
-                throw new IllegalArgumentException("Virtual queues do not support setting these queue attributes independently of their host queues: "
-                        + attributes.keySet());
-            }
+        if (!attributes.isEmpty()) {
+            throw new IllegalArgumentException("Virtual queues do not support setting these queue attributes independently of their host queues: "
+                    + attributes.keySet());
+        }
 
-            HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
-            VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
+        HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
+        VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
 
-            // There is clearly a race condition here between checking the size and
-            // adding to the map, but that's fine since this is just a loose upper bound
-            // and it avoids synchronizing all calls on something like an AtomicInteger.
-            // The worse case scenario is that the map has X entries more than the maximum
-            // where X is the number of threads concurrently creating queues.
-            if (virtualQueues.size() > MAXIMUM_VIRTUAL_QUEUES_COUNT) {
-                throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
-                        + MAXIMUM_VIRTUAL_QUEUES_COUNT);
-            }
-            virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
+        // There is clearly a race condition here between checking the size and
+        // adding to the map, but that's fine since this is just a loose upper bound
+        // and it avoids synchronizing all calls on something like an AtomicInteger.
+        // The worse case scenario is that the map has X entries more than the maximum
+        // where X is the number of threads concurrently creating queues.
+        if (virtualQueues.size() > MAXIMUM_VIRTUAL_QUEUES_COUNT) {
+            throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
+                    + MAXIMUM_VIRTUAL_QUEUES_COUNT);
+        }
+        virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
 
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
-            }
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+        }
 
-            return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
-        });
+        return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
     }
     
     @Override
@@ -207,16 +203,13 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-        return DeleteVirtualQueue.measureLatency(() -> {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+        }
 
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
-            }
-
-            return getVirtualQueue(request.getQueueUrl())
-                    .map(virtualQueue -> virtualQueue.deleteQueue())
-                    .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
-        });
+        return getVirtualQueue(request.getQueueUrl())
+                .map(virtualQueue -> virtualQueue.deleteQueue())
+                .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
     }
 
     @Override
