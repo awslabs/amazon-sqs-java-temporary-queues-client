@@ -50,7 +50,7 @@ import java.util.Objects;
 
 public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
 
-    protected final AmazonSQS amazonSqsToBeExtended;
+    private final AmazonSQS amazonSqsToBeExtended;
     // TODO-RS: Use RequestHandler2 instead!
     protected final String userAgent;
 

@@ -102,11 +102,11 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
-    AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended,
+    AmazonSQSVirtualQueuesClient(AmazonSQS amazonSQSToBeExtended,
                                  Optional<BiConsumer<String, Message>> messageHandlerOptional,
                                  BiConsumer<String, Message> orphanedMessageHandler,
                                  int hostQueuePollingThreads, int maxWaitTimeSeconds) {
-        super(amazonSqsToBeExtended);
+        super(amazonSQSToBeExtended);
         this.messageHandlerOptional = Objects.requireNonNull(messageHandlerOptional);
         this.orphanedMessageHandler = Objects.requireNonNull(orphanedMessageHandler);
         this.hostQueuePollingThreads = hostQueuePollingThreads;
@@ -131,7 +131,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     public CreateQueueResult createQueue(CreateQueueRequest request) {
         String hostQueueUrl = request.getAttributes().get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
         if (hostQueueUrl == null) {
-            return amazonSqsToBeExtended.createQueue(request);
+            return super.createQueue(request);
         }
 
         Map<String, String> attributes = new HashMap<>(request.getAttributes());
@@ -166,22 +166,22 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     @Override
     public SendMessageResult sendMessage(SendMessageRequest request) {
         return VirtualQueueID.fromQueueUrl(request.getQueueUrl())
-                .map(id -> id.sendMessage(amazonSqsToBeExtended, request))
-                .orElseGet(() -> amazonSqsToBeExtended.sendMessage(request));
+                .map(id -> super.sendMessage(id.virtualizeSendMessageRequest(request)))
+                .orElseGet(() -> super.sendMessage(request));
     }
 
     @Override
     public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.receiveMessage(request))
-                .orElseGet(() -> amazonSqsToBeExtended.receiveMessage(request));
+                .orElseGet(() -> super.receiveMessage(request));
     }
 
     @Override
     public DeleteMessageResult deleteMessage(DeleteMessageRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteMessage(request))
-                .orElseGet(() -> amazonSqsToBeExtended.deleteMessage(request));
+                .orElseGet(() -> super.deleteMessage(request));
     }
 
     @Override
@@ -191,14 +191,14 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
-                .orElseGet(() -> amazonSqsToBeExtended.deleteQueue(request));
+                .orElseGet(() -> super.deleteQueue(request));
     }
 
     @Override
     public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.getQueueAttributes(request))
-                .orElseGet(() -> amazonSqsToBeExtended.getQueueAttributes(request));
+                .orElseGet(() -> super.getQueueAttributes(request));
     }
     
     @Override
@@ -206,7 +206,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         if (VirtualQueueID.fromQueueUrl(request.getQueueUrl()).isPresent()) {
             throw new IllegalArgumentException("Cannot change queue attributes of virtual queues after creation: " + request.getQueueUrl());
         } else {
-            return amazonSqsToBeExtended.setQueueAttributes(request);
+            return super.setQueueAttributes(request);
         }
     }
 
@@ -214,21 +214,21 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     public TagQueueResult tagQueue(TagQueueRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.tagQueue(request))
-                .orElseGet(() -> amazonSqsToBeExtended.tagQueue(request));
+                .orElseGet(() -> super.tagQueue(request));
     }
     
     @Override
     public UntagQueueResult untagQueue(UntagQueueRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.untagQueue(request))
-                .orElseGet(() -> amazonSqsToBeExtended.untagQueue(request));
+                .orElseGet(() -> super.untagQueue(request));
     }
     
     @Override
     public ListQueueTagsResult listQueueTags(ListQueueTagsRequest request) {
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.listQueueTags())
-                .orElseGet(() -> amazonSqsToBeExtended.listQueueTags(request));
+                .orElseGet(() -> super.listQueueTags(request));
     }
     
     @Override
@@ -247,7 +247,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             this.queueUrl = queueUrl;
             // Used to avoid repeatedly fetching the default visibility timeout and receive message
             // wait time on the queue.
-            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
+            this.buffer = new ReceiveQueueBuffer(AmazonSQSVirtualQueuesClient.this, queueUrl);
 
             this.consumer = SQSMessageConsumerBuilder.standard()
                                                      .withAmazonSQS(AmazonSQSVirtualQueuesClient.this)
@@ -316,7 +316,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             GetQueueAttributesRequest hostQueueRequest = new GetQueueAttributesRequest()
                     .withQueueUrl(hostQueue.queueUrl)
                     .withAttributeNames(attributeNames);
-            GetQueueAttributesResult result = amazonSqsToBeExtended.getQueueAttributes(hostQueueRequest);
+            GetQueueAttributesResult result = AmazonSQSVirtualQueuesClient.super.getQueueAttributes(hostQueueRequest);
             if (includeHostQueue) {
                 result.getAttributes().put(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueue.queueUrl);
             }
@@ -352,7 +352,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             DeleteMessageRequest virtualQueueResult = new DeleteMessageRequest()
                     .withQueueUrl(id.getHostQueueUrl())
                     .withReceiptHandle(request.getReceiptHandle());
-            return amazonSqsToBeExtended.deleteMessage(virtualQueueResult);
+            return AmazonSQSVirtualQueuesClient.super.deleteMessage(virtualQueueResult);
         }
         
         public void heartbeat() {
@@ -414,11 +414,11 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             return hostQueueUrl + '#' + virtualQueueName;
         }
         
-        public SendMessageResult sendMessage(AmazonSQS sqs, SendMessageRequest request) {
+        public SendMessageRequest virtualizeSendMessageRequest(SendMessageRequest request) {
             SendMessageRequest virtualQueueRequest = SQSQueueUtils.copyWithExtraAttributes(request, Collections.singletonMap(VIRTUAL_QUEUE_NAME_ATTRIBUTE, 
                     new MessageAttributeValue().withDataType("String").withStringValue(virtualQueueName)));
             virtualQueueRequest.setQueueUrl(hostQueueUrl);
-            return sqs.sendMessage(virtualQueueRequest);
+            return virtualQueueRequest;
         }
     }
 }

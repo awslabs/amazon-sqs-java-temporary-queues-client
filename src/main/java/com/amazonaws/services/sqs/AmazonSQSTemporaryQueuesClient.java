@@ -91,17 +91,17 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
             CreateQueueRequest hostQueueCreateRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
             hostQueueCreateRequest.setQueueName(prefix + '-' + hostQueueUrls.size());
-            return amazonSqsToBeExtended.createQueue(hostQueueCreateRequest).getQueueUrl();
+            return super.createQueue(hostQueueCreateRequest).getQueueUrl();
         });
 
         extraQueueAttributes.put(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
         CreateQueueRequest createVirtualQueueRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
-        return amazonSqsToBeExtended.createQueue(createVirtualQueueRequest);
+        return super.createQueue(createVirtualQueueRequest);
     }
 
     @Override
     public void shutdown() {
-        hostQueueUrls.values().forEach(amazonSqsToBeExtended::deleteQueue);
+        hostQueueUrls.values().forEach(super::deleteQueue);
         virtualizer.shutdown();
         deleter.shutdown();
     }

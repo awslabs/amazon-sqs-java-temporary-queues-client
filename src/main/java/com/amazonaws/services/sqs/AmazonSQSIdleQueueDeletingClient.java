@@ -149,13 +149,13 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String queueUrl = result.getQueueUrl();
 
         String retentionPeriodString = retentionPeriod.get().toString();
-        amazonSqsToBeExtended.tagQueue(queueUrl,
+        super.tagQueue(queueUrl,
                 Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString));
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
         List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
                                                     QueueAttributeName.VisibilityTimeout.toString());
-        Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl, attributeNames).getAttributes();
+        Map<String, String> createdAttributes = super.getQueueAttributes(queueUrl, attributeNames).getAttributes();
         createdAttributes.put(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriodString);
 
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
@@ -234,7 +234,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         // TODO-RS: Clock drift? Shouldn't realistically be a problem as long as the idleness threshold is long enough.
         long currentTimestamp = System.currentTimeMillis();
         try {
-            amazonSqsToBeExtended.tagQueue(queueUrl, 
+            super.tagQueue(queueUrl,
                     Collections.singletonMap(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp)));
         } catch (QueueDoesNotExistException e) {
             recreateQueue(queueUrl);
@@ -346,7 +346,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     private List<Message> receiveIgnoringNonExistantQueue(ReceiveMessageRequest request) {
         try {
             heartbeatToQueueIfNecessary(request.getQueueUrl());
-            return amazonSqsToBeExtended.receiveMessage(request).getMessages();
+            return super.receiveMessage(request).getMessages();
         } catch (QueueDoesNotExistException e) {
             return Collections.emptyList();
         }
@@ -421,7 +421,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     public void teardown() {
         shutdown();
         if (idleQueueSweeper != null) {
-            amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+            super.deleteQueue(idleQueueSweeper.getQueueUrl());
         }
     }
 }
