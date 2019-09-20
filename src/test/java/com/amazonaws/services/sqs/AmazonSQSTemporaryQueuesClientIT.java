@@ -5,9 +5,16 @@ import static com.amazonaws.services.sqs.AmazonSQSVirtualQueuesClient.VIRTUAL_QU
 import static org.junit.Assert.assertNotNull;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amazonaws.auth.policy.Policy;
+import com.amazonaws.auth.policy.Principal;
+import com.amazonaws.auth.policy.Statement;
+import com.amazonaws.auth.policy.actions.SQSActions;
+import com.amazonaws.services.sqs.model.CreateQueueRequest;
+import com.amazonaws.services.sqs.model.QueueAttributeName;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -45,5 +52,16 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
         
         Map<String, String> hostQueueAttributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
         Assert.assertEquals("300", hostQueueAttributes.get(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD));
+    }
+
+    @Test
+    public void createQueueSupportsExtraAttributes() {
+        // Just ensures that Policy and MessageRetentionPeriod are supported for virtual queues
+        Map<String, String> queueAttributes = new HashMap<>();
+        Policy policy = new Policy();
+        policy.withStatements(new Statement(Statement.Effect.Allow).withActions(SQSActions.AllSQSActions).withPrincipals(Principal.All));
+        queueAttributes.put(QueueAttributeName.Policy.name(), policy.toJson());
+        queueAttributes.put(QueueAttributeName.MessageRetentionPeriod.name(), "300");
+        client.createQueue(new CreateQueueRequest().withQueueName("TestQueue").withAttributes(queueAttributes)).getQueueUrl();
     }
 }
