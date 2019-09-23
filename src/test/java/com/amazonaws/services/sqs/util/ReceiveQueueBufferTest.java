@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -28,10 +29,12 @@ import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 public class ReceiveQueueBufferTest {
 
     private final AmazonSQS sqs;
+    private final ScheduledExecutorService executor;
     private final String queueUrl;
     
     public ReceiveQueueBufferTest() {
         this.sqs = mock(AmazonSQS.class);
+        this.executor = mock(ScheduledExecutorService.class);
         this.queueUrl = "http://queue.amazon.com/123456789012/MyQueue";
         
         Map<String, String> attributes = new HashMap<>();
@@ -51,7 +54,7 @@ public class ReceiveQueueBufferTest {
     
     @Test
     public void deliverBeforeReceive() throws InterruptedException, ExecutionException, TimeoutException {
-        ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, queueUrl);
+        ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, executor, queueUrl);
         Message message = new Message().withBody("Hi there!");
         buffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
         Future<ReceiveMessageResult> future = buffer.receiveMessageAsync(new ReceiveMessageRequest());
@@ -61,7 +64,7 @@ public class ReceiveQueueBufferTest {
     
     @Test
     public void deliverAfterReceive() throws InterruptedException, ExecutionException, TimeoutException {
-        ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, queueUrl);
+        ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, executor, queueUrl);
         Message message = new Message().withBody("Hi there!");
         Future<ReceiveMessageResult> future = buffer.receiveMessageAsync(new ReceiveMessageRequest());
         buffer.deliverMessages(Collections.singletonList(message), queueUrl, null);

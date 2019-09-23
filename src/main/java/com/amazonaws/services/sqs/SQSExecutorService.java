@@ -9,6 +9,7 @@ import static com.amazonaws.util.StringUtils.UTF8;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
@@ -208,12 +209,16 @@ class SQSExecutorService extends AbstractExecutorService {
     }
 
     protected MessageContent toMessageContent(Runnable runnable) {
+        Objects.requireNonNull(runnable);
+
         MessageContent messageContent = new MessageContent(serializer.apply(runnable));
         addDeduplicationAttributes(messageContent, runnable);
         return messageContent;
     }
 
     protected MessageContent toMessageContent(Callable<?> callable) {
+        Objects.requireNonNull(callable);
+
         MessageContent messageContent = new MessageContent(serializer.apply(callable));
         messageContent.setMessageAttributesEntry(SQSFutureTask.IS_CALLABLE_ATTRIBUTE_NAME, booleanMessageAttributeValue(true));
         addDeduplicationAttributes(messageContent, callable);

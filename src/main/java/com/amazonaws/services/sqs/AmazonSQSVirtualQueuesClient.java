@@ -24,6 +24,7 @@ import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
@@ -43,6 +44,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
@@ -87,7 +89,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     private final int hostQueuePollingThreads;
 
     private final int maxWaitTimeSeconds;
-    
+
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
 
     static final BiConsumer<String, Message> DEFAULT_ORPHANED_MESSAGE_HANDLER = (queueName, message) -> {
@@ -99,8 +101,21 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final Optional<BiConsumer<String, Message>> messageHandlerOptional;
     private final BiConsumer<String, Message> orphanedMessageHandler;
-    
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+    // Used to delete idle virtual queues.
+    private final ScheduledExecutorService executor = createIdleQueueDeletionExecutor();
+
+    private static ScheduledExecutorService createIdleQueueDeletionExecutor() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1,
+                new DaemonThreadFactory("AmazonSQSVirtualQueuesClient"));
+        // Since we are cancelling and resubmitting a task on every heartbeat,
+        // without this setting the size of the work queue will depend on the number of
+        // heartbeat calls made within the retention period, and hence on the TPS made to
+        // the queue. That can lead to increased memory pressure, possibly even exhausting
+        // memory.
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
 
     AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended,
                                  Optional<BiConsumer<String, Message>> messageHandlerOptional,
@@ -136,7 +151,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         Map<String, String> attributes = new HashMap<>(request.getAttributes());
         attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
-        
+
         Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
 
         if (!attributes.isEmpty()) {
@@ -146,7 +161,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
         VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
-        
+
         // There is clearly a race condition here between checking the size and
         // adding to the map, but that's fine since this is just a loose upper bound
         // and it avoids synchronizing all calls on something like an AtomicInteger.
@@ -157,9 +172,11 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     + MAXIMUM_VIRTUAL_QUEUES_COUNT);
         }
         virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
-        
-        LOG.info(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
-        
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+        }
+
         return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
     }
     
@@ -186,8 +203,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     @Override
     public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-
-        LOG.info(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(String.format("Deleting Virtual Queue is %s and Queue Name is %s", (virtualQueues.size() - 1), request.getQueueUrl()));
+        }
 
         return getVirtualQueue(request.getQueueUrl())
                 .map(virtualQueue -> virtualQueue.deleteQueue())
@@ -247,7 +265,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             this.queueUrl = queueUrl;
             // Used to avoid repeatedly fetching the default visibility timeout and receive message
             // wait time on the queue.
-            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, queueUrl);
+            this.buffer = new ReceiveQueueBuffer(amazonSqsToBeExtended, executor, queueUrl);
 
             this.consumer = SQSMessageConsumerBuilder.standard()
                                                      .withAmazonSQS(AmazonSQSVirtualQueuesClient.this)
