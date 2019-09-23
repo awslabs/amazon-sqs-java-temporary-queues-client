@@ -12,22 +12,26 @@ public enum MonitoredCall {
 
     public <T> T monitor(MonitoringListener monitoringListener, Supplier<T> supplier) {
         long startNanos = System.nanoTime();
+        long latencyNanos;
+        Exception thrown = null;
         try {
             T result = supplier.get();
-            long latencyNanos = System.nanoTime() - startNanos;
+            latencyNanos = System.nanoTime() - startNanos;
             ApiCallMonitoringEvent event = new ApiCallMonitoringEvent()
                     .withApi(name())
                     .withLatency(TimeUnit.NANOSECONDS.toMillis(latencyNanos));
             monitoringListener.handleEvent(event);
             return result;
         } catch (Exception e) {
-            long latencyNanos = System.nanoTime() - startNanos;
+            thrown = e;
+            throw e;
+        } finally {
+            latencyNanos = System.nanoTime() - startNanos;
             ApiCallAttemptMonitoringEvent event = new ApiCallAttemptMonitoringEvent()
                     .withApi(name())
                     .withAttemptLatency(TimeUnit.NANOSECONDS.toMillis(latencyNanos))
-                    .withSdkException(e.getClass().getName());
+                    .withSdkException(thrown.getClass().getName());
             monitoringListener.handleEvent(event);
-            throw e;
         }
     }
 }
