@@ -74,7 +74,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
     private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
+
     private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
+    private static final long DLQ_MESSAGE_RETENTION_PERIOD = TimeUnit.DAYS.toSeconds(14);
 
     static final String LAST_HEARTBEAT_TIMESTAMP_TAG = "__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp";
 
@@ -122,7 +124,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         // Note that SSE doesn't have to be enabled on this queue since the messages
         // will already be encrypted in the primary queue, and dead-lettering doesn't affect that.
         // The messages will still be receivable from the DLQ regardless.
-        deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, Collections.emptyMap());
+        Map<String, String> dlqAttributes = new HashMap<>();
+        dlqAttributes.put(QueueAttributeName.MessageRetentionPeriod.name(), Long.toString(DLQ_MESSAGE_RETENTION_PERIOD));
+        deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, dlqAttributes);
         String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
                 Collections.singletonList(QueueAttributeName.QueueArn.name()))
                         .getAttributes().get(QueueAttributeName.QueueArn.name());
