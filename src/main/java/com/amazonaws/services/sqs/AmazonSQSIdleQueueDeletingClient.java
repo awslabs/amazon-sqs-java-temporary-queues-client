@@ -119,6 +119,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
 
         // Create the DLQ first so the primary queue can reference it
+        // Note that SSE doesn't have to be enabled on this queue since the messages
+        // will already be encrypted in the primary queue, and dead-lettering doesn't affect that.
+        // The messages will still be receivable from the DLQ regardless.
         deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, Collections.emptyMap());
         String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
                 Collections.singletonList(QueueAttributeName.QueueArn.name()))

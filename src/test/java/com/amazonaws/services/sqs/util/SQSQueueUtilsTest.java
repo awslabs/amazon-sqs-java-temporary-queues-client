@@ -15,7 +15,7 @@ public class SQSQueueUtilsTest {
     /**
      * This test fails if a new member is added to SendMessageRequest class.
      *
-     * This acts as a remainder to notify us to update the
+     * This acts as a reminder to notify us to update the
      * {@link SQSQueueUtils#copyWithExtraAttributes(SendMessageRequest, Map)} method when a
      * member is added to {@link SendMessageRequest}.
      */
@@ -39,7 +39,7 @@ public class SQSQueueUtilsTest {
     /**
      * This test fails if a new member is added to CreateQueueRequest class.
      *
-     * This acts as a remainder to notify us to update the
+     * This acts as a reminder to notify us to update the
      * {@link SQSQueueUtils#copyWithExtraAttributes(CreateQueueRequest, Map)} method when a
      * member is added to {@link CreateQueueRequest}.
      */
