@@ -1,7 +1,10 @@
 package com.amazonaws.services.sqs;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -9,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.CreateQueueResult;
+import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
@@ -30,7 +34,20 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     // TODO-RS: Expose configuration
     private final static String QUEUE_RETENTION_PERIOD_SECONDS = Long.toString(TimeUnit.MINUTES.toSeconds(5));
-    
+
+    // We don't necessary support all queue attributes - some will behave differently on a virtual queue
+    // In particular, a virtual FIFO queue will deduplicate at the scope of its host queue!
+    private final static Set<String> SUPPORTED_QUEUE_ATTRIBUTES = new HashSet<>(Arrays.asList(
+            QueueAttributeName.DelaySeconds.name(),
+            QueueAttributeName.MaximumMessageSize.name(),
+            QueueAttributeName.MessageRetentionPeriod.name(),
+            QueueAttributeName.Policy.name(),
+            QueueAttributeName.ReceiveMessageWaitTimeSeconds.name(),
+            QueueAttributeName.RedrivePolicy.name(),
+            QueueAttributeName.VisibilityTimeout.name(),
+            QueueAttributeName.KmsMasterKeyId.name(),
+            QueueAttributeName.KmsDataKeyReusePeriodSeconds.name()));
+
     // These clients are owned by this one, and need to be shutdown when this client is.
     private final AmazonSQSIdleQueueDeletingClient deleter;
     private final AmazonSQS virtualizer;
@@ -85,6 +102,14 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
+        // Check for unsupported queue attributes first
+        Set<String> unsupportedQueueAttributes = new HashSet<>(request.getAttributes().keySet());
+        unsupportedQueueAttributes.removeAll(SUPPORTED_QUEUE_ATTRIBUTES);
+        if (!unsupportedQueueAttributes.isEmpty()) {
+            throw new IllegalArgumentException("Cannot create a temporary queue with the following attributes: "
+                    + String.join(", ", unsupportedQueueAttributes));
+        }
+
         Map<String, String> extraQueueAttributes = new HashMap<>();
         // Add the retention period to both the host queue and each virtual queue
         extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, QUEUE_RETENTION_PERIOD_SECONDS);
@@ -95,7 +120,11 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         });
 
         extraQueueAttributes.put(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
-        CreateQueueRequest createVirtualQueueRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
+        // The host queue takes care of all the other queue attributes, so don't specify them when creating the virtual
+        // queue or else the client may think we're trying to set them independently!
+        CreateQueueRequest createVirtualQueueRequest = new CreateQueueRequest()
+                .withQueueName(request.getQueueName())
+                .withAttributes(extraQueueAttributes);
         return amazonSqsToBeExtended.createQueue(createVirtualQueueRequest);
     }
 
