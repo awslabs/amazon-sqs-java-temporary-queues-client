@@ -10,6 +10,10 @@ import com.amazonaws.auth.policy.Resource;
 import com.amazonaws.auth.policy.Statement;
 import com.amazonaws.auth.policy.actions.SQSActions;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.services.securitytoken.model.GetCallerIdentityRequest;
 import com.amazonaws.services.sqs.model.AmazonSQSException;
 import org.junit.After;
 import org.junit.Before;
@@ -90,13 +94,18 @@ public abstract class IntegrationTest {
         return client;
     }
 
-    protected Policy allowSendMessagePolicy() {
+    protected Policy allowSendMessagePolicyForBuddyAccount() {
+//        return Policy.fromJson("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"1\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"990398840953\"]},\"Action\":[\"sqs:SendMessage\"],\"Resource\":[\"arn:aws:sqs:*:*:*\"]}]}");
+        AWSSecurityTokenService stsClient =
+                AWSSecurityTokenServiceClientBuilder.standard()
+                                                    .withCredentials(new ProfileCredentialsProvider("buddy"))
+                                                    .build();
+        String account = stsClient.getCallerIdentity(new GetCallerIdentityRequest()).getAccount();
+
         Policy policy = new Policy();
         Statement statement = new Statement(Statement.Effect.Allow);
         statement.setActions(Collections.singletonList(SQSActions.SendMessage));
-        // Ideally we would only allow the principal we're testing with, but we
-        // only have access to the credentials and not necessarily the account number.
-        statement.setPrincipals(Principal.All);
+        statement.setPrincipals(Principal.);//new Principal(account));
         statement.setResources(Collections.singletonList(new Resource("arn:aws:sqs:*:*:*")));
         policy.setStatements(Collections.singletonList(statement));
         return policy;

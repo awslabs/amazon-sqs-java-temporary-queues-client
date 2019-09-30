@@ -28,7 +28,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        String policyString = allowSendMessagePolicy().toJson();
+        String policyString = allowSendMessagePolicyForBuddyAccount().toJson();
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString),
                 exceptionHandler);

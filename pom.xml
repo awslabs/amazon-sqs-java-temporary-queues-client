@@ -61,6 +61,11 @@
       <version>2.10.0</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk-sts</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
