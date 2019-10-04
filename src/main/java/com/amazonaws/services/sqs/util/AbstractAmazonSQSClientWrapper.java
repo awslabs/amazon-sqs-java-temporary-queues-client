@@ -1,7 +1,12 @@
 package com.amazonaws.services.sqs.util;
 
+import com.amazonaws.AmazonWebServiceClient;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ResponseMetadata;
+import com.amazonaws.monitoring.ApiCallAttemptMonitoringEvent;
+import com.amazonaws.monitoring.ApiCallMonitoringEvent;
+import com.amazonaws.monitoring.MonitoringEvent;
+import com.amazonaws.monitoring.MonitoringListener;
 import com.amazonaws.services.sqs.AbstractAmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.AddPermissionRequest;
@@ -45,23 +50,87 @@ import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.util.VersionInfoUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
+import java.util.Collection;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public class AbstractAmazonSQSClientWrapper extends AbstractAmazonSQS {
+
+    private static final Log LOG = LogFactory.getLog(AbstractAmazonSQSClientWrapper.class);
 
     protected final AmazonSQS amazonSqsToBeExtended;
     // TODO-RS: Use RequestHandler2 instead!
     protected final String userAgent;
+    protected final Collection<MonitoringListener> monitoringListeners;
 
     public AbstractAmazonSQSClientWrapper(AmazonSQS amazonSqsToBeExtended) {
         this.amazonSqsToBeExtended = Objects.requireNonNull(amazonSqsToBeExtended);
         this.userAgent = getClass().getSimpleName() + "/" + VersionInfoUtils.getVersion();
+        this.monitoringListeners = extractListeners(amazonSqsToBeExtended);
     }
 
     public AbstractAmazonSQSClientWrapper(AmazonSQS amazonSqsToBeExtended, String userAgent) {
-        this.amazonSqsToBeExtended = amazonSqsToBeExtended;
+        this.amazonSqsToBeExtended = Objects.requireNonNull(amazonSqsToBeExtended);
         this.userAgent = userAgent;
+        this.monitoringListeners = extractListeners(amazonSqsToBeExtended);
+    }
+
+    private Collection<MonitoringListener> extractListeners(AmazonSQS sqs) {
+        if (sqs instanceof AmazonSQS) {
+            return ((AmazonWebServiceClient)sqs).getMonitoringListeners();
+        } else if (sqs instanceof AbstractAmazonSQSClientWrapper) {
+            return ((AbstractAmazonSQSClientWrapper)sqs).getMonitoringListeners();
+        } else {
+            throw new IllegalArgumentException(("Couldn't extract monitoring listeners from " + sqs));
+        }
+    }
+
+    public Collection<MonitoringListener> getMonitoringListeners() {
+        return monitoringListeners;
+    }
+
+    protected <T> T monitor(MonitoredCall call, Supplier<T> supplier) {
+        long startNanos = System.nanoTime();
+        long latencyNanos;
+        Exception thrown = null;
+        try {
+            T result = supplier.get();
+            latencyNanos = System.nanoTime() - startNanos;
+            ApiCallMonitoringEvent event = new ApiCallMonitoringEvent()
+                    .withApi(call.name())
+                    .withLatency(TimeUnit.NANOSECONDS.toMillis(latencyNanos));
+            emitEvent(event);
+            return result;
+        } catch (Exception e) {
+            thrown = e;
+            throw e;
+        } finally {
+            latencyNanos = System.nanoTime() - startNanos;
+            ApiCallAttemptMonitoringEvent event = new ApiCallAttemptMonitoringEvent()
+                    .withApi(call.name())
+                    .withAttemptLatency(TimeUnit.NANOSECONDS.toMillis(latencyNanos));
+            if (thrown != null) {
+                event.withSdkException(thrown.getClass().getName());
+            }
+            emitEvent(event);
+        }
+    }
+
+    private void emitEvent(MonitoringEvent event) {
+        for (MonitoringListener monitoringListener : monitoringListeners) {
+            try {
+                monitoringListener.handleEvent(event);
+            } catch (Exception exception) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(String.format("MonitoringListener: %s failed to handle event", monitoringListener.toString()),
+                            exception);
+                }
+            }
+        }
     }
 
     @Override

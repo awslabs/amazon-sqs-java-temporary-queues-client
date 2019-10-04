@@ -25,6 +25,7 @@ import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
+import com.amazonaws.services.sqs.util.MonitoredCall;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
@@ -50,6 +51,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
 import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
+import static com.amazonaws.services.sqs.util.MonitoredCall.CreateVirtualQueue;
 
 /**
  * An AmazonSQS wrapper that adds support for "virtual" queues, which are logical
@@ -149,35 +151,37 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             return amazonSqsToBeExtended.createQueue(request);
         }
 
-        Map<String, String> attributes = new HashMap<>(request.getAttributes());
-        attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        return monitor(CreateVirtualQueue, () -> {
+            Map<String, String> attributes = new HashMap<>(request.getAttributes());
+            attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
 
-        Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
+            Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
 
-        if (!attributes.isEmpty()) {
-            throw new IllegalArgumentException("Virtual queues do not support setting these queue attributes independently of their host queues: "
-                    + attributes.keySet());
-        }
+            if (!attributes.isEmpty()) {
+                throw new IllegalArgumentException("Virtual queues do not support setting these queue attributes independently of their host queues: "
+                        + attributes.keySet());
+            }
 
-        HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
-        VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
+            HostQueue host = hostQueues.computeIfAbsent(hostQueueUrl, HostQueue::new);
+            VirtualQueue virtualQueue = new VirtualQueue(host, request.getQueueName(), retentionPeriod);
 
-        // There is clearly a race condition here between checking the size and
-        // adding to the map, but that's fine since this is just a loose upper bound
-        // and it avoids synchronizing all calls on something like an AtomicInteger.
-        // The worse case scenario is that the map has X entries more than the maximum
-        // where X is the number of threads concurrently creating queues.
-        if (virtualQueues.size() > MAXIMUM_VIRTUAL_QUEUES_COUNT) {
-            throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
-                    + MAXIMUM_VIRTUAL_QUEUES_COUNT);
-        }
-        virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
+            // There is clearly a race condition here between checking the size and
+            // adding to the map, but that's fine since this is just a loose upper bound
+            // and it avoids synchronizing all calls on something like an AtomicInteger.
+            // The worse case scenario is that the map has X entries more than the maximum
+            // where X is the number of threads concurrently creating queues.
+            if (virtualQueues.size() > MAXIMUM_VIRTUAL_QUEUES_COUNT) {
+                throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
+                        + MAXIMUM_VIRTUAL_QUEUES_COUNT);
+            }
+            virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
-        }
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Total Virtual Queue Created is %s and Queue Name is %s", virtualQueues.size(), virtualQueue.getID().getVirtualQueueName()));
+            }
 
-        return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
+            return new CreateQueueResult().withQueueUrl(virtualQueue.getID().getQueueUrl());
+        });
     }
     
     @Override
