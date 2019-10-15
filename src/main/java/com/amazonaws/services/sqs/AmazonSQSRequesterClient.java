@@ -18,6 +18,8 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
+import javax.annotation.PreDestroy;
+
 /**
  * Implementation of the request/response interfaces that creates a single
  * temporary queue for each response message.
@@ -76,7 +78,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         sqs.sendMessage(requestWithResponseUrl);
 
         CompletableFuture<Message> future = new CompletableFuture<>();
-        
+
         // TODO-RS: accept an AmazonSQSAsync instead and use its threads instead of our own.
         // TODO-RS: complete the future exceptionally, for the right set of SQS exceptions
         SQSMessageConsumer consumer = new ResponseListener(responseQueueUrl, future);
@@ -110,6 +112,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     }
     
     @Override
+    @PreDestroy
     public void shutdown() {
         responseConsumers.forEach(SQSMessageConsumer::terminate);
         if (shutdownHook != null) {

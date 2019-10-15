@@ -7,6 +7,8 @@ import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 
+import javax.annotation.PreDestroy;
+
 class AmazonSQSResponderClient implements AmazonSQSResponder {
     
     private static final Log LOG = LogFactory.getLog(AmazonSQSResponderClient.class);
@@ -49,6 +51,7 @@ class AmazonSQSResponderClient implements AmazonSQSResponder {
     }
     
     @Override
+    @PreDestroy
     public void shutdown() {
     }
 }
