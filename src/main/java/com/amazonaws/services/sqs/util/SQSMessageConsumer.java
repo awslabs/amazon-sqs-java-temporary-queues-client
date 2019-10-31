@@ -148,7 +148,7 @@ public class SQSMessageConsumer implements AutoCloseable {
             // Ignore
         } catch (RuntimeException processingException) {
             // TODO-RS: separate accept from delete in exception handling
-            String errorMessage = "Exception encounted while processing message with ID " + message.getMessageId();
+            String errorMessage = "Exception encountered while processing message with ID " + message.getMessageId();
             exceptionHandler.accept(new RuntimeException(errorMessage, processingException));
             
             try {
@@ -156,7 +156,7 @@ public class SQSMessageConsumer implements AutoCloseable {
             } catch (QueueDoesNotExistException e) {
                 // Ignore
             } catch (RuntimeException cmvException) {
-                String cmvErrorMessage = "Exception encounted while changing message visibility with ID " + message.getMessageId();
+                String cmvErrorMessage = "Exception encountered while changing message visibility with ID " + message.getMessageId();
                 exceptionHandler.accept(new RuntimeException(cmvErrorMessage, cmvException));
             }
         }

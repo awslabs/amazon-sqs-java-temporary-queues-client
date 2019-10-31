@@ -57,7 +57,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
             // Already shutting down, ignore
         } catch (Exception e) {
             // Make sure the recurring task never throws so it doesn't terminate.
-            String message = "Encounted error when checking queues for idleness (prefix = " + prefix + ")";
+            String message = "Encountered error when checking queues for idleness (prefix = " + prefix + ")";
             exceptionHandler.accept(new RuntimeException(message, e));
         }
     }
