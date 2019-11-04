@@ -15,6 +15,7 @@ public class AmazonSQSRequesterClientBuilder {
     private Map<String, String> queueAttributes = Collections.emptyMap();
     
     private int idleQueueSweepingPeriod = 5;
+    private long idleQueueHeartbeatInterval = 5;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     
     private AmazonSQSRequesterClientBuilder() {
@@ -87,7 +88,20 @@ public class AmazonSQSRequesterClientBuilder {
         setIdleQueueSweepingPeriod(period, timeUnit);
         return this;
     }
-    
+
+    public long getIdleQueueHeartbeatInterval() {
+		return idleQueueHeartbeatInterval;
+	}
+
+	public void setIdleQueueHeartbeatInterval(long heartbeatInterval) {
+        this.idleQueueHeartbeatInterval = heartbeatInterval;
+    }
+
+	public AmazonSQSRequesterClientBuilder withIdleQueueHeartbeatInterval(long heartbeatInterval) {
+        setIdleQueueHeartbeatInterval(heartbeatInterval);
+        return this;
+	}
+
     public AmazonSQSRequester build() {
         return AmazonSQSTemporaryQueuesClient.make(this).getRequester();
     }

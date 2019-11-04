@@ -73,7 +73,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
     // TODO-RS: Configuration
-    private static final long HEARTBEAT_INTERVAL_SECONDS = 5;
+    private final long HEARTBEAT_INTERVAL_SECONDS;
 
     private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
     private static final long DLQ_MESSAGE_RETENTION_PERIOD = TimeUnit.DAYS.toSeconds(14);
@@ -104,13 +104,19 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     private IdleQueueSweeper idleQueueSweeper;
     private String deadLetterQueueUrl;
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix, Long heartbeatInterval) {
         super(sqs);
         
         if (queueNamePrefix.isEmpty()) {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
+        this.HEARTBEAT_INTERVAL_SECONDS = heartbeatInterval != null ? heartbeatInterval : 5;
+
+    }
+
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
+        this(sqs, queueNamePrefix, null);
     }
 
     protected synchronized void startSweeper(AmazonSQSRequester requester, AmazonSQSResponder responder,
