@@ -63,4 +63,22 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
             // Expected
         }
     }
+
+    @Test
+    public void ReceiveMessageWaitTimeSecondsNull() {
+        CreateQueueRequest request = new CreateQueueRequest()
+                .withQueueName("ReceiveMessageWaitTimeSecondsNull")
+                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "5");
+        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+
+        // Do Receive message request with null WaitTimeSeconds.
+        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
+                .withQueueUrl(virtualQueueUrl);
+        try {
+            assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+        } catch (NullPointerException npe) {
+            fail("NPE not expected with null WaitTimeSeconds on ReceiveMessageRequest");
+        }
+    }
 }
