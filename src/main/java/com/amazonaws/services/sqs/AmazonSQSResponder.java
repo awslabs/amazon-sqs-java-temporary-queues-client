@@ -1,6 +1,6 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.services.sqs.AmazonSQS;
+import javax.annotation.PreDestroy;
 
 public interface AmazonSQSResponder {
     
@@ -21,5 +21,6 @@ public interface AmazonSQSResponder {
      */
     public void sendResponseMessage(MessageContent requestMessage, MessageContent response);
 
+    @PreDestroy
     public void shutdown();
 }

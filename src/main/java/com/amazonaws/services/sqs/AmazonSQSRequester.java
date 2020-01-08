@@ -1,12 +1,13 @@
 package com.amazonaws.services.sqs;
 
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+
+import javax.annotation.PreDestroy;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 
 public interface AmazonSQSRequester {
 
@@ -26,5 +27,6 @@ public interface AmazonSQSRequester {
     public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request, 
             int timeout, TimeUnit unit);
 
+    @PreDestroy
     public void shutdown();
 }

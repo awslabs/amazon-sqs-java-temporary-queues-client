@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import javax.annotation.PreDestroy;
+
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
@@ -165,7 +167,8 @@ public class SQSMessageConsumer implements AutoCloseable {
     protected void accept(Message message) {
         consumer.accept(message);
     }
-    
+
+    @PreDestroy
     public void shutdown() {
         if (shuttingDown.compareAndSet(false, true)) {
             runShutdownHook();
