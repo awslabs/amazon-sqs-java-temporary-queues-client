@@ -122,10 +122,7 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
         public SendMessageRequest toSendMessageRequest() {
             SendMessageRequest request = super.toSendMessageRequest();
 
-            int sqsDelaySeconds = (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(Math.abs(delay)), MAX_SQS_DELAY_SECONDS);
-            if (sqsDelaySeconds <= 0) {
-                sqsDelaySeconds = 1;
-            }
+            int sqsDelaySeconds = Math.max(1, (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(delay), MAX_SQS_DELAY_SECONDS));
             request.setDelaySeconds(sqsDelaySeconds);
 
             return request;
