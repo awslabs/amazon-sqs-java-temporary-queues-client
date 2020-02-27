@@ -2,6 +2,8 @@ package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
 import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -12,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
@@ -39,7 +40,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
     private static String queueUrl;
     private static List<SQSExecutorService> executors = new ArrayList<>();
     private static AtomicInteger seedCount = new AtomicInteger();
-    private static CountDownLatch tasksCompletedLatch;
+    private static AtomicInteger tasksRemaining;
 
     private static class SQSScheduledExecutorWithAssertions extends SQSScheduledExecutorService implements Serializable {
 
@@ -66,8 +67,14 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
                 Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
-        tasksCompletedLatch = new CountDownLatch(1);
+        tasksRemaining = new AtomicInteger(1);
         executors.clear();
+    }
+
+    private void awaitTasksSeconds(int minimumSeconds, int maximumSeconds) {
+        await().atLeast(minimumSeconds, TimeUnit.SECONDS).and()
+               .atMost(maximumSeconds, TimeUnit.SECONDS)
+               .untilAtomic(tasksRemaining, equalTo(0));
     }
 
     @After
@@ -110,29 +117,29 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
     }
 
     private static void sweepLeaf(Executor executor, int number) {
-        if (tasksCompletedLatch.getCount() == 0) {
+        if (tasksRemaining.get() == 0) {
             throw new IllegalStateException("Too many leaves swept!");
         }
-        tasksCompletedLatch.countDown();
+        tasksRemaining.decrementAndGet();
     }
 
     @Test
     public void singleDelayedTask() throws InterruptedException {
         SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-        executor.delayedExecute(serializable(() -> tasksCompletedLatch.countDown()), 1, TimeUnit.SECONDS);
-        assertTrue(tasksCompletedLatch.await(5, TimeUnit.SECONDS));
+        executor.delayedExecute(serializable(() -> tasksRemaining.decrementAndGet()), 1, TimeUnit.SECONDS);
+        awaitTasksSeconds(1, 5);
     }
 
     @Test
     public void taskThatSpawnsTasksMultipleExecutors() throws InterruptedException {
-        tasksCompletedLatch = new CountDownLatch(20);
+        tasksRemaining = new AtomicInteger(20);
         List<SQSScheduledExecutorService> sweepers = 
                 IntStream.range(0, 5)
                          .mapToObj(x -> createScheduledExecutor(queueUrl))
                          .collect(Collectors.toList());
         sweepers.forEach(executor -> 
                 executor.delayedExecute(deduplicated(() -> seed(executor)), 1, TimeUnit.SECONDS));
-        assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
+        awaitTasksSeconds(1, 15);
     }
 
     private static void slowTask() {
@@ -141,17 +148,52 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        tasksCompletedLatch.countDown();
+        tasksRemaining.decrementAndGet();
+    }
+
+    private static void fastTask() {
+        tasksRemaining.decrementAndGet();
     }
 
     @Test
-    public void scheduleAtFixedRate() throws InterruptedException, ExecutionException {
-        tasksCompletedLatch = new CountDownLatch(3);
+    public void scheduleSlowTaskAtFixedRate() throws InterruptedException, ExecutionException {
+        tasksRemaining = new AtomicInteger(3);
         SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
         Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIT::slowTask), 1, 1, TimeUnit.SECONDS);
-        assertTrue(tasksCompletedLatch.await(15, TimeUnit.SECONDS));
+        awaitTasksSeconds(3, 15);
+        assertScheduledTaskCanBeCancelled(future);
+    }
+
+    @Test
+    public void scheduleSlowTaskWithFixedDelay() throws InterruptedException, ExecutionException {
+        tasksRemaining = new AtomicInteger(3);
+        SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
+        Future<?> future = executor.scheduleWithFixedDelay(serializable(SQSScheduledExecutorServiceIT::slowTask), 1, 1, TimeUnit.SECONDS);
+        awaitTasksSeconds(9, 15);
+        assertScheduledTaskCanBeCancelled(future);
+    }
+
+    @Test
+    public void scheduleFastTaskAtFixedRate() throws InterruptedException, ExecutionException {
+        tasksRemaining = new AtomicInteger(3);
+        SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
+        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIT::fastTask), 1, 1, TimeUnit.SECONDS);
+        awaitTasksSeconds(3, 15);
+        assertScheduledTaskCanBeCancelled(future);
+    }
+
+    @Test
+    public void scheduleFastTaskWithFixedDelay() throws InterruptedException, ExecutionException {
+        tasksRemaining = new AtomicInteger(3);
+        SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
+        Future<?> future = executor.scheduleWithFixedDelay(serializable(SQSScheduledExecutorServiceIT::fastTask), 1, 1, TimeUnit.SECONDS);
+        awaitTasksSeconds(3, 15);
+        assertScheduledTaskCanBeCancelled(future);
+    }
+
+    public void assertScheduledTaskCanBeCancelled(Future<?> future) throws ExecutionException, InterruptedException {
         assertFalse(future.isDone());
-        
+
         // Cancel and assert that the future behaves correctly locally...
         future.cancel(true);
         assertTrue(future.isDone());
@@ -163,31 +205,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         } catch (CancellationException e) {
             // Expected
         }
-        
-        // ...and that the message gets purged from the queue
-        assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 10, TimeUnit.SECONDS));
-    }
 
-    @Test
-    public void scheduleWithFixedDelay() throws InterruptedException, ExecutionException {
-        tasksCompletedLatch = new CountDownLatch(3);
-        SQSScheduledExecutorService executor = createScheduledExecutor(queueUrl);
-        Future<?> future = executor.scheduleAtFixedRate(serializable(SQSScheduledExecutorServiceIT::slowTask), 1, 1, TimeUnit.SECONDS);
-        assertTrue(tasksCompletedLatch.await(10, TimeUnit.SECONDS));
-        assertFalse(future.isDone());
-        
-        // Cancel and assert that the future behaves correctly locally...
-        future.cancel(true);
-        assertTrue(future.isDone());
-        assertTrue(future.isCancelled());
-        // TODO-RS: Switch to JUnit 5
-        try {
-            future.get();
-            fail("Expected CancellationException");
-        } catch (CancellationException e) {
-            // Expected
-        }
-        
         // ...and that the message gets purged from the queue
         assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 10, TimeUnit.SECONDS));
     }

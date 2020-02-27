@@ -22,7 +22,7 @@ public class IdleQueueSweeperIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).build();
+        requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).withIdleQueueSweepingPeriod(0, TimeUnit.SECONDS).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
         sweepingQueueUrl = sqs.createQueue(queueNamePrefix).getQueueUrl();
         sweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix, 5, TimeUnit.SECONDS, exceptionHandler);
