@@ -19,7 +19,7 @@ import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
- * Implementation of the request/response interfaces that creates a single
+ *  Implementation of the request/response interfaces that creates a single
  * temporary queue for each response message.
  */
 class AmazonSQSRequesterClient implements AmazonSQSRequester {
