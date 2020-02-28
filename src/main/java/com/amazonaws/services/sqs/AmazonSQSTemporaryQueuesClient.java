@@ -17,7 +17,7 @@ import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
- * An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
+ *  An AmazonSQS wrapper that only creates virtual, automatically-deleted queues.
  * <p>
  * This client is built on the functionality of the {@link AmazonSQSIdleQueueDeletingClient}
  * and the {@link AmazonSQSVirtualQueuesClient}, and is intended to be a drop-in replacement
