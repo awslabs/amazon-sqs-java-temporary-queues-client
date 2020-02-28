@@ -52,7 +52,7 @@ import java.util.function.BiConsumer;
 import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
 
 /**
- * An AmazonSQS wrapper that adds support for "virtual" queues, which are logical
+ *  An AmazonSQS wrapper that adds support for "virtual" queues, which are logical
  * queues hosted by an actual "physical" SQS queue.
  * <p>
  * Virtual queues are created by invoking {@link #createQueue(CreateQueueRequest)} with the
