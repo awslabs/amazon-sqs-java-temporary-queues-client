@@ -28,7 +28,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        // Use the second account for the responder
+        // Use the secondary role for the responder
         sqsResponder = new AmazonSQSResponderClient(getBuddyPrincipalClient());
 
         String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
