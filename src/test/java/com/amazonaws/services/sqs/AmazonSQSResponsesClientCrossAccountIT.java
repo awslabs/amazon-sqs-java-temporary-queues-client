@@ -28,12 +28,14 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
 
     @Before
     public void setup() {
-        String policyString = allowSendMessagePolicy().toJson();
+        // Use the second account for the responder
+        sqsResponder = new AmazonSQSResponderClient(getBuddyPrincipalClient());
+
+        String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString),
                 exceptionHandler);
-        // Use the second account for the responder
-        sqsResponder = new AmazonSQSResponderClient(getBuddyPrincipalClient());
+
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }
 
