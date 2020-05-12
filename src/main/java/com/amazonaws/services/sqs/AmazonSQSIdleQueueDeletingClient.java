@@ -72,8 +72,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = TimeUnit.MINUTES.toSeconds(5);
     
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
-    // TODO-RS: Configuration
-    private final long HEARTBEAT_INTERVAL_SECONDS;
 
     private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
     private static final long DLQ_MESSAGE_RETENTION_PERIOD = TimeUnit.DAYS.toSeconds(14);
@@ -98,6 +96,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             new DaemonThreadFactory("AmazonSQSIdleQueueDeletingClient"));
 
     private final String queueNamePrefix;
+    private final long heartbeatInterval;
 
     private final Map<String, QueueMetadata> queues = new ConcurrentHashMap<>();
 
@@ -111,8 +110,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
         this.queueNamePrefix = queueNamePrefix;
-        this.HEARTBEAT_INTERVAL_SECONDS = heartbeatInterval != null ? heartbeatInterval : 5;
-
+        this.heartbeatInterval = heartbeatInterval != null ? heartbeatInterval : AmazonSQSRequesterClientBuilder.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     }
 
     public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
@@ -199,7 +197,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         queues.put(queueUrl, metadata);
 
         metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(queueUrl), 
-                0, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+                0, heartbeatInterval, TimeUnit.SECONDS);
 
         return result;
     }
@@ -284,7 +282,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         QueueMetadata queueMetadata = queues.get(queueUrl);
         if (queueMetadata != null) {
             Long lastHeartbeat = queueMetadata.heartbeatTimestamp;
-            if (lastHeartbeat == null || (System.currentTimeMillis() - lastHeartbeat) > 2 * HEARTBEAT_INTERVAL_SECONDS) {
+            if (lastHeartbeat == null || (System.currentTimeMillis() - lastHeartbeat) > 2 * heartbeatInterval) {
                 return;
             }
             heartbeatToQueue(queueUrl);

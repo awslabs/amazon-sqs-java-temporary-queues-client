@@ -7,15 +7,16 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSRequesterClientBuilder {
-    
+
+    public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
     private Optional<AmazonSQS> customSQS = Optional.empty();
-    
+
     private String internalQueuePrefix = "__RequesterClientQueues__";
-    
+
     private Map<String, String> queueAttributes = Collections.emptyMap();
-    
+
     private int idleQueueSweepingPeriod = 5;
-    private long idleQueueHeartbeatInterval = 5;
+    private long queueHeartbeatInterval = HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     
     private AmazonSQSRequesterClientBuilder() {
@@ -27,19 +28,19 @@ public class AmazonSQSRequesterClientBuilder {
     public static AmazonSQSRequesterClientBuilder standard() {
         return new AmazonSQSRequesterClientBuilder();
     }
-    
+
     public static AmazonSQSRequester defaultClient() {
         return standard().build();
     }
-    
+
     public Optional<AmazonSQS> getAmazonSQS() {
         return customSQS;
     }
-    
+
     public void setAmazonSQS(AmazonSQS sqs) {
         this.customSQS = Optional.of(sqs);
     }
-    
+
     public AmazonSQSRequesterClientBuilder withAmazonSQS(AmazonSQS sqs) {
         setAmazonSQS(sqs);
         return this;
@@ -48,24 +49,24 @@ public class AmazonSQSRequesterClientBuilder {
     public String getInternalQueuePrefix() {
         return internalQueuePrefix;
     }
-    
+
     public void setInternalQueuePrefix(String internalQueuePrefix) {
         this.internalQueuePrefix = internalQueuePrefix;
     }
-    
+
     public AmazonSQSRequesterClientBuilder withInternalQueuePrefix(String internalQueuePrefix) {
         setInternalQueuePrefix(internalQueuePrefix);
         return this;
     }
-    
+
     public Map<String, String> getQueueAttributes() {
         return Collections.unmodifiableMap(queueAttributes);
     }
-    
+
     public void setQueueAttributes(Map<String, String> queueAttributes) {
         this.queueAttributes = new HashMap<>(queueAttributes);
     }
-    
+
     public AmazonSQSRequesterClientBuilder withQueueAttributes(Map<String, String> queueAttributes) {
         setQueueAttributes(queueAttributes);
         return this;
@@ -78,29 +79,29 @@ public class AmazonSQSRequesterClientBuilder {
     public TimeUnit getIdleQueueSweepingTimeUnit() {
         return idleQueueSweepingTimeUnit;
     }
-    
+
     public void setIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
         this.idleQueueSweepingPeriod = period;
         this.idleQueueSweepingTimeUnit = timeUnit;
     }
-    
+
     public AmazonSQSRequesterClientBuilder withIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
         setIdleQueueSweepingPeriod(period, timeUnit);
         return this;
     }
 
-    public long getIdleQueueHeartbeatInterval() {
-		return idleQueueHeartbeatInterval;
-	}
-
-	public void setIdleQueueHeartbeatInterval(long heartbeatInterval) {
-        this.idleQueueHeartbeatInterval = heartbeatInterval;
+    public long getQueueHeartbeatInterval() {
+        return queueHeartbeatInterval;
     }
 
-	public AmazonSQSRequesterClientBuilder withIdleQueueHeartbeatInterval(long heartbeatInterval) {
-        setIdleQueueHeartbeatInterval(heartbeatInterval);
+    public void setQueueHeartbeatInterval(long heartbeatInterval) {
+        this.queueHeartbeatInterval = heartbeatInterval;
+    }
+
+    public AmazonSQSRequesterClientBuilder withQueueHeartbeatInterval(long heartbeatInterval) {
+        setQueueHeartbeatInterval(heartbeatInterval);
         return this;
-	}
+    }
 
     public AmazonSQSRequester build() {
         return AmazonSQSTemporaryQueuesClient.make(this).getRequester();

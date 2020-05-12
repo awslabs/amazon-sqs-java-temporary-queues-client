@@ -7,7 +7,7 @@ public class AmazonSQSResponderClientBuilder {
     private Optional<AmazonSQS> customSQS = Optional.empty();
     
     private String internalQueuePrefix = "__RequesterClientQueues__";
-    private long idleQueueHeartbeatInterval = 5;
+    private long queueHeartbeatInterval = 5;
     
     private AmazonSQSResponderClientBuilder() {
     }
@@ -42,16 +42,16 @@ public class AmazonSQSResponderClientBuilder {
         return this;
     }
 
-    public long getIdleQueueHeartbeatInterval() {
-        return idleQueueHeartbeatInterval;
+    public long getQueueHeartbeatInterval() {
+        return queueHeartbeatInterval;
     }
 
-    public void setIdleQueueHeartbeatInterval(long idleQueueHeartbeatInterval) {
-        this.idleQueueHeartbeatInterval = idleQueueHeartbeatInterval;
+    public void setQueueHeartbeatInterval(long queueHeartbeatInterval) {
+        this.queueHeartbeatInterval = queueHeartbeatInterval;
     }
 
-    public AmazonSQSResponderClientBuilder withIdleQueueHeartbeatInterval(long heartbeatInterval) {
-        setIdleQueueHeartbeatInterval(heartbeatInterval);
+    public AmazonSQSResponderClientBuilder withQueueHeartbeatInterval(long heartbeatInterval) {
+        setQueueHeartbeatInterval(heartbeatInterval);
         return this;
     }
 
@@ -64,7 +64,7 @@ public class AmazonSQSResponderClientBuilder {
     
     public AmazonSQSResponder build() {
         AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix, idleQueueHeartbeatInterval);
+        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix, queueHeartbeatInterval);
         AmazonSQS virtualQueuesClient = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter).build();
         return new AmazonSQSResponderClient(virtualQueuesClient);
     }
