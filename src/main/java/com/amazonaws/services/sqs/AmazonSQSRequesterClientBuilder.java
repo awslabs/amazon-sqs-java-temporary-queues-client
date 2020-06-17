@@ -6,9 +6,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+
 public class AmazonSQSRequesterClientBuilder {
 
-    public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
     private Optional<AmazonSQS> customSQS = Optional.empty();
 
     private String internalQueuePrefix = "__RequesterClientQueues__";
@@ -94,12 +95,12 @@ public class AmazonSQSRequesterClientBuilder {
         return queueHeartbeatInterval;
     }
 
-    public void setQueueHeartbeatInterval(long heartbeatInterval) {
-        this.queueHeartbeatInterval = heartbeatInterval;
+    public void setQueueHeartbeatInterval(long heartbeatIntervalSeconds) {
+        this.queueHeartbeatInterval = heartbeatIntervalSeconds;
     }
 
-    public AmazonSQSRequesterClientBuilder withQueueHeartbeatInterval(long heartbeatInterval) {
-        setQueueHeartbeatInterval(heartbeatInterval);
+    public AmazonSQSRequesterClientBuilder withQueueHeartbeatInterval(long heartbeatIntervalSeconds) {
+        setQueueHeartbeatInterval(heartbeatIntervalSeconds);
         return this;
     }
 

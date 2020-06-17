@@ -70,7 +70,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
     public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
     public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = TimeUnit.MINUTES.toSeconds(5);
-    
+    public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
+    public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 0;
+
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
 
     private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
@@ -96,21 +98,33 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
             new DaemonThreadFactory("AmazonSQSIdleQueueDeletingClient"));
 
     private final String queueNamePrefix;
-    private final long heartbeatInterval;
+    private final long heartbeatIntervalSeconds;
 
     private final Map<String, QueueMetadata> queues = new ConcurrentHashMap<>();
 
     private IdleQueueSweeper idleQueueSweeper;
     private String deadLetterQueueUrl;
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix, Long heartbeatInterval) {
+    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix, Long heartbeatIntervalSeconds) {
         super(sqs);
         
         if (queueNamePrefix.isEmpty()) {
             throw new IllegalArgumentException("Queue name prefix must be non-empty");
         }
+
         this.queueNamePrefix = queueNamePrefix;
-        this.heartbeatInterval = heartbeatInterval != null ? heartbeatInterval : AmazonSQSRequesterClientBuilder.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+
+        if (heartbeatIntervalSeconds != null) {
+            if (heartbeatIntervalSeconds <= HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE) {
+                throw new IllegalArgumentException("Heartbeat Interval Seconds: " +
+                        heartbeatIntervalSeconds +
+                        " must be bigger than " +
+                        HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE);
+            }
+            this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+        } else {
+            this.heartbeatIntervalSeconds = HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+        }
     }
 
     public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
@@ -197,7 +211,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         queues.put(queueUrl, metadata);
 
         metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(queueUrl), 
-                0, heartbeatInterval, TimeUnit.SECONDS);
+                0, heartbeatIntervalSeconds, TimeUnit.SECONDS);
 
         return result;
     }
@@ -282,7 +296,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         QueueMetadata queueMetadata = queues.get(queueUrl);
         if (queueMetadata != null) {
             Long lastHeartbeat = queueMetadata.heartbeatTimestamp;
-            if (lastHeartbeat == null || (System.currentTimeMillis() - lastHeartbeat) > 2 * heartbeatInterval) {
+            if (lastHeartbeat == null || (System.currentTimeMillis() - lastHeartbeat) > 2 * heartbeatIntervalSeconds) {
                 return;
             }
             heartbeatToQueue(queueUrl);
