@@ -71,7 +71,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
     public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = TimeUnit.MINUTES.toSeconds(5);
     public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
-    public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 0;
+    public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 1;
 
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
 
@@ -115,10 +115,10 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         this.queueNamePrefix = queueNamePrefix;
 
         if (heartbeatIntervalSeconds != null) {
-            if (heartbeatIntervalSeconds <= HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE) {
+            if (heartbeatIntervalSeconds < HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE) {
                 throw new IllegalArgumentException("Heartbeat Interval Seconds: " +
                         heartbeatIntervalSeconds +
-                        " must be bigger than " +
+                        " must be equal to or bigger than " +
                         HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE);
             }
             this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;

@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
-
 public class AmazonSQSRequesterClientBuilder {
 
     private Optional<AmazonSQS> customSQS = Optional.empty();
@@ -17,7 +15,7 @@ public class AmazonSQSRequesterClientBuilder {
     private Map<String, String> queueAttributes = Collections.emptyMap();
 
     private int idleQueueSweepingPeriod = 5;
-    private long queueHeartbeatInterval = HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+    private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     
     private AmazonSQSRequesterClientBuilder() {

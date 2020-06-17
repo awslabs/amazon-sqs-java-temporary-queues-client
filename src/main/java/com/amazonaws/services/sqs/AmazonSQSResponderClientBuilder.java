@@ -2,14 +2,12 @@ package com.amazonaws.services.sqs;
 
 import java.util.Optional;
 
-import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
-
 public class AmazonSQSResponderClientBuilder {
 
     private Optional<AmazonSQS> customSQS = Optional.empty();
     
     private String internalQueuePrefix = "__RequesterClientQueues__";
-    private long queueHeartbeatInterval = HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+    private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     
     private AmazonSQSResponderClientBuilder() {
     }
