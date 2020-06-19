@@ -32,9 +32,6 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
 // queues.
 class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
-    // TODO-RS: Expose configuration
-    private final static String QUEUE_RETENTION_PERIOD_SECONDS = Long.toString(TimeUnit.MINUTES.toSeconds(5));
-
     // We don't necessary support all queue attributes - some will behave differently on a virtual queue
     // In particular, a virtual FIFO queue will deduplicate at the scope of its host queue!
     private final static Set<String> SUPPORTED_QUEUE_ATTRIBUTES = new HashSet<>(Arrays.asList(
@@ -55,21 +52,33 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
 
     private final String prefix;
+    private final String queueRetentionPeriodSeconds;
 
     private AmazonSQSRequester requester;
-    
-    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
+
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, String queueRetentionPeriodSeconds) {
         super(virtualizer);
         this.virtualizer = virtualizer;
         this.deleter = deleter;
         this.prefix = queueNamePrefix + UUID.randomUUID().toString();
+
+        if (queueRetentionPeriodSeconds != null) {
+            AmazonSQSIdleQueueDeletingClient.checkQueueRetentionPeriodBounds(Long.parseLong(queueRetentionPeriodSeconds));
+            this.queueRetentionPeriodSeconds = queueRetentionPeriodSeconds;
+        } else {
+            this.queueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
+        }
+    }
+    
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
+        this(virtualizer, deleter, queueNamePrefix, null);
     }
 
     public static AmazonSQSTemporaryQueuesClient make(AmazonSQSRequesterClientBuilder builder) {
         AmazonSQS sqs = builder.getAmazonSQS().orElseGet(AmazonSQSClientBuilder::defaultClient);
         AmazonSQSIdleQueueDeletingClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, builder.getInternalQueuePrefix());
         AmazonSQS virtualizer = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter).build();
-        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix());
+        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix(), builder.getQueueRetentionPeriodSeconds());
         AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());
         AmazonSQSResponderClient responder = new AmazonSQSResponderClient(temporaryQueuesClient);
         temporaryQueuesClient.startIdleQueueSweeper(requester, responder,
@@ -112,7 +121,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         Map<String, String> extraQueueAttributes = new HashMap<>();
         // Add the retention period to both the host queue and each virtual queue
-        extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, QUEUE_RETENTION_PERIOD_SECONDS);
+        extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, queueRetentionPeriodSeconds);
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
             CreateQueueRequest hostQueueCreateRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
             hostQueueCreateRequest.setQueueName(prefix + '-' + hostQueueUrls.size());

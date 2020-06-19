@@ -16,6 +16,7 @@ public class AmazonSQSRequesterClientBuilder {
     
     private int idleQueueSweepingPeriod = 5;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
+    private String queueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
     
     private AmazonSQSRequesterClientBuilder() {
     }
@@ -87,8 +88,22 @@ public class AmazonSQSRequesterClientBuilder {
         setIdleQueueSweepingPeriod(period, timeUnit);
         return this;
     }
+
+    public String getQueueRetentionPeriodSeconds() {
+        return queueRetentionPeriodSeconds;
+    }
+
+    public void setQueueRetentionPeriodSeconds(String queueRetentionPeriodSeconds) {
+        this.queueRetentionPeriodSeconds = queueRetentionPeriodSeconds;
+    }
+
+    public AmazonSQSRequesterClientBuilder withQueueRetentionPeriodSeconds(String queueRetentionPeriodSeconds) {
+        setQueueRetentionPeriodSeconds(queueRetentionPeriodSeconds);
+        return this;
+    }
     
     public AmazonSQSRequester build() {
         return AmazonSQSTemporaryQueuesClient.make(this).getRequester();
     }
+
 }

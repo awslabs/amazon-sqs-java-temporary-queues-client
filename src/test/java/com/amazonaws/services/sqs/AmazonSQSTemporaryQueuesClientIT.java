@@ -62,4 +62,39 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
             Assert.assertEquals("Cannot create a temporary queue with the following attributes: FifoQueue", e.getMessage());
         }
     }
+
+    @Test
+    public void createQueueConfigurableIdleQueueRetentionPeriod() {
+        AmazonSQSRequesterClientBuilder requesterBuilder =
+                AmazonSQSRequesterClientBuilder.standard()
+                        .withAmazonSQS(sqs)
+                        .withInternalQueuePrefix(queueNamePrefix)
+                        .withQueueRetentionPeriodSeconds("200");
+        client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
+
+        queueUrl = client.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
+        Map<String, String> attributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
+        String hostQueueUrl = attributes.get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        assertNotNull(hostQueueUrl);
+        Assert.assertEquals("200", attributes.get(IDLE_QUEUE_RETENTION_PERIOD));
+
+        Map<String, String> hostQueueAttributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
+        Assert.assertEquals("200", hostQueueAttributes.get(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD));
+    }
+
+    @Test
+    public void createQueueWithUnsupportedIdleQueueRetentionPeriod() {
+        try {
+            AmazonSQSRequesterClientBuilder requesterBuilder =
+                    AmazonSQSRequesterClientBuilder.standard()
+                            .withAmazonSQS(sqs)
+                            .withInternalQueuePrefix(queueNamePrefix)
+                            .withQueueRetentionPeriodSeconds("500");
+            client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
+
+            Assert.fail("Shouldn't be able to create a temporary queue with QueueRetentionPeriodSeconds not between 1 and 300 seconds");
+        } catch (IllegalArgumentException e) {
+            Assert.assertEquals("The IdleQueueRetentionPeriodSeconds attribute must be between 1 and 300 seconds", e.getMessage());
+        }
+    }
 }
