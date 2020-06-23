@@ -58,7 +58,8 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
  * as this client uses {@link #listQueues(ListQueuesRequest)} to sweep them.
  * <p>
  * This client uses a heartbeating mechanism based on queue tags. Making API calls to queues
- * through this client causes tags on those queues to be refreshed every 5 seconds. If the process
+ * through this client causes tags on those queues to be refreshed every 5 seconds (by default,
+ * heartbeating mechanism is configurable). If the process
  * using a client shuts down uncleanly, other client instances using the same queue prefix will
  * detect that its queue(s) are idle and delete them.
  */
