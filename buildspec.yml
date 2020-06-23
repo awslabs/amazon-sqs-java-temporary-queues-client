@@ -12,7 +12,7 @@ phases:
       - echo Build started on `date`
       - mvn clean install
       - echo Running integration tests
-      - mvn failsafe:integration-test
+      - mvn test-compile failsafe:integration-test failsafe:verify
   post_build:
     commands:
       - echo Build completed on `date`
