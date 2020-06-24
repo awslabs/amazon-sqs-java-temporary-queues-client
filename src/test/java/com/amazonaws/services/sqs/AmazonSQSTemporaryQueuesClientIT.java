@@ -16,6 +16,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.services.sqs.util.IntegrationTest;
+import org.junit.jupiter.api.Assertions;
 
 public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
@@ -69,7 +70,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
                 AmazonSQSRequesterClientBuilder.standard()
                         .withAmazonSQS(sqs)
                         .withInternalQueuePrefix(queueNamePrefix)
-                        .withQueueRetentionPeriodSeconds("200");
+                        .withQueueRetentionPeriodSeconds(200);
         client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
 
         queueUrl = client.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
@@ -84,17 +85,13 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     @Test
     public void createQueueWithUnsupportedIdleQueueRetentionPeriod() {
-        try {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> {
             AmazonSQSRequesterClientBuilder requesterBuilder =
                     AmazonSQSRequesterClientBuilder.standard()
                             .withAmazonSQS(sqs)
                             .withInternalQueuePrefix(queueNamePrefix)
-                            .withQueueRetentionPeriodSeconds("500");
+                            .withQueueRetentionPeriodSeconds(500);
             client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
-
-            Assert.fail("Shouldn't be able to create a temporary queue with QueueRetentionPeriodSeconds not between 1 and 300 seconds");
-        } catch (IllegalArgumentException e) {
-            Assert.assertEquals("The IdleQueueRetentionPeriodSeconds attribute must be between 1 and 300 seconds", e.getMessage());
-        }
+        });
     }
 }

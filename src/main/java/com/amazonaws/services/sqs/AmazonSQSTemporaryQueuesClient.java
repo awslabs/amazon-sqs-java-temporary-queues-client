@@ -52,18 +52,18 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     private final ConcurrentMap<Map<String, String>, String> hostQueueUrls = new ConcurrentHashMap<>();
 
     private final String prefix;
-    private final String queueRetentionPeriodSeconds;
+    private final long queueRetentionPeriodSeconds;
 
     private AmazonSQSRequester requester;
 
-    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, String queueRetentionPeriodSeconds) {
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, Long queueRetentionPeriodSeconds) {
         super(virtualizer);
         this.virtualizer = virtualizer;
         this.deleter = deleter;
         this.prefix = queueNamePrefix + UUID.randomUUID().toString();
 
         if (queueRetentionPeriodSeconds != null) {
-            AmazonSQSIdleQueueDeletingClient.checkQueueRetentionPeriodBounds(Long.parseLong(queueRetentionPeriodSeconds));
+            AmazonSQSIdleQueueDeletingClient.checkQueueRetentionPeriodBounds(queueRetentionPeriodSeconds);
             this.queueRetentionPeriodSeconds = queueRetentionPeriodSeconds;
         } else {
             this.queueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
@@ -121,7 +121,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         Map<String, String> extraQueueAttributes = new HashMap<>();
         // Add the retention period to both the host queue and each virtual queue
-        extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, queueRetentionPeriodSeconds);
+        extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, Long.toString(queueRetentionPeriodSeconds));
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
             CreateQueueRequest hostQueueCreateRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
             hostQueueCreateRequest.setQueueName(prefix + '-' + hostQueueUrls.size());
