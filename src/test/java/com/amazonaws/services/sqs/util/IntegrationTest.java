@@ -3,13 +3,21 @@ package com.amazonaws.services.sqs.util;
 import java.util.Collections;
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.policy.Policy;
 import com.amazonaws.auth.policy.Principal;
 import com.amazonaws.auth.policy.Resource;
 import com.amazonaws.auth.policy.Statement;
 import com.amazonaws.auth.policy.actions.SQSActions;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
+import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
+import com.amazonaws.services.securitytoken.model.Credentials;
+import com.amazonaws.services.securitytoken.model.GetCallerIdentityRequest;
 import com.amazonaws.services.sqs.model.AmazonSQSException;
 import org.junit.After;
 import org.junit.Before;
@@ -62,14 +70,20 @@ public abstract class IntegrationTest {
         exceptionHandler.assertNothingThrown();
     }
 
-    protected AmazonSQS getBuddyPrincipalClient() {
-        AWSCredentialsProvider credentialsProvider = new ProfileCredentialsProvider("buddy");
-        try {
-            credentialsProvider.getCredentials();
-        } catch (Exception e) {
-            assumeNoException("This test requires a second 'buddy' credential profile.", e);
+    protected String getBuddyRoleARN() {
+        String roleARN = System.getenv("BUDDY_ROLE_ARN");
+        if (roleARN == null) {
+            assumeTrue("This test requires a second 'buddy' AWS role, provided with the BUDDY_ROLE_ARN environment variable.", false);
         }
+        return roleARN;
+    }
 
+    protected AWSCredentialsProvider getBuddyCredentials() {
+        return new STSAssumeRoleSessionCredentialsProvider.Builder(getBuddyRoleARN(), testSuiteName()).build();
+    }
+
+    protected AmazonSQS getBuddyPrincipalClient() {
+        AWSCredentialsProvider credentialsProvider = getBuddyCredentials();
         AmazonSQS client = AmazonSQSClientBuilder.standard()
                 .withRegion("us-west-2")
                 .withCredentials(credentialsProvider)
@@ -90,13 +104,11 @@ public abstract class IntegrationTest {
         return client;
     }
 
-    protected Policy allowSendMessagePolicy() {
+    protected Policy allowSendMessagePolicy(String roleARN) {
         Policy policy = new Policy();
         Statement statement = new Statement(Statement.Effect.Allow);
         statement.setActions(Collections.singletonList(SQSActions.SendMessage));
-        // Ideally we would only allow the principal we're testing with, but we
-        // only have access to the credentials and not necessarily the account number.
-        statement.setPrincipals(Principal.All);
+        statement.setPrincipals(new Principal(roleARN));
         statement.setResources(Collections.singletonList(new Resource("arn:aws:sqs:*:*:*")));
         policy.setStatements(Collections.singletonList(statement));
         return policy;

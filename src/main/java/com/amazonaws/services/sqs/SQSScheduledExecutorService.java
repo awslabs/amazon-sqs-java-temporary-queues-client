@@ -62,11 +62,11 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
             this.period = unit.toNanos(period);
 
             messageContent.setMessageAttributesEntry(DELAY_NANOS_ATTRIBUTE_NAME, 
-                    longMessageAttributeValue(delay));
+                    longMessageAttributeValue(this.delay));
             messageContent.setMessageAttributesEntry(PERIOD_NANOS_ATTRIBUTE_NAME, 
-                    longMessageAttributeValue(period));
+                    longMessageAttributeValue(this.period));
 
-            this.time = getTime(delay);
+            this.time = getTime(this.delay);
         }
 
         public ScheduledSQSFutureTask(Message message) {
@@ -122,10 +122,7 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
         public SendMessageRequest toSendMessageRequest() {
             SendMessageRequest request = super.toSendMessageRequest();
 
-            int sqsDelaySeconds = (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(delay), MAX_SQS_DELAY_SECONDS);
-            if (sqsDelaySeconds < 0) {
-                sqsDelaySeconds = 1;
-            }
+            int sqsDelaySeconds = Math.max(1, (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(delay), MAX_SQS_DELAY_SECONDS));
             request.setDelaySeconds(sqsDelaySeconds);
 
             return request;
