@@ -18,6 +18,7 @@ import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
+
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     private static AmazonSQSIdleQueueDeletingClient client;
@@ -64,6 +65,54 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         Assert.assertTrue("Expected queue to be deleted: " + queueUrl,
                           SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void updatedHeartBeatTag() throws InterruptedException {
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
+                .withQueueName(queueNamePrefix + "-IdleQueue")
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+
+        String initialHeartBeat = client
+                .listQueueTags(queueUrl)
+                .getTags()
+                .get("__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp");
+
+        // By default, heartbeatIntervalSeconds is set to 5
+        // Wait 5 seconds for the LastHeartbeatTimestamp tag to get updated
+        TimeUnit.SECONDS.sleep(5);
+
+        String updatedHeartbeat = client
+                .listQueueTags(queueUrl)
+                .getTags()
+                .get("__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp");
+
+        Assert.assertNotEquals(initialHeartBeat, updatedHeartbeat);
+    }
+
+    @Test
+    public void notUpdatedHeartBeatTag() throws InterruptedException {
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
+                .withQueueName(queueNamePrefix + "-IdleQueue")
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+
+        String initialHeartBeat = client
+                .listQueueTags(queueUrl)
+                .getTags()
+                .get("__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp");
+
+        // By default, heartbeatIntervalSeconds is set to 5
+        // Wait 4 seconds the LastHeartbeatTimestamp tag should still be the same
+        TimeUnit.SECONDS.sleep(4);
+
+        String notUpdatedHeartbeat = client
+                .listQueueTags(queueUrl)
+                .getTags()
+                .get("__AmazonSQSIdleQueueDeletingClient.LastHeartbeatTimestamp");
+
+        Assert.assertEquals(initialHeartBeat, notUpdatedHeartbeat);
     }
     
     @Test
