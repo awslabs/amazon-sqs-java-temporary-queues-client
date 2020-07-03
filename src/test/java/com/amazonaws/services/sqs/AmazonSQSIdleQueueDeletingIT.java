@@ -5,6 +5,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
 import org.junit.Assert;
@@ -17,6 +18,7 @@ import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+
 
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
@@ -64,6 +66,61 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         Assert.assertTrue("Expected queue to be deleted: " + queueUrl,
                           SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void updatedHeartBeatTag() throws InterruptedException {
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
+                .withQueueName(queueNamePrefix + "-HeartbeatTag")
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+
+        SendMessageRequest sendMsgRequest = new SendMessageRequest()
+                .withQueueUrl(queueUrl)
+                .withMessageBody("hello world");
+        client.sendMessage(sendMsgRequest);
+
+        String initialHeartBeat = getLastHeartbeatTimestamp();
+
+        // Wait 2 * heartbeatIntervalSeconds before sending message
+        // so that heartbeatToQueueIfNecessary calls
+        // heartbeatToQueue and update LAST_HEARTBEAT_TIMESTAMP_TAG
+        TimeUnit.SECONDS.sleep(10);
+        client.sendMessage(sendMsgRequest);
+
+        String updatedHeartbeat = getLastHeartbeatTimestamp();
+
+        Assert.assertNotEquals(initialHeartBeat, updatedHeartbeat);
+    }
+
+    private String getLastHeartbeatTimestamp() {
+        return client
+                .listQueueTags(queueUrl)
+                .getTags()
+                .get(AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG);
+    }
+
+    @Test
+    public void notUpdatedHeartBeatTag() throws InterruptedException {
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
+                .withQueueName(queueNamePrefix + "-HeartbeatTag")
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+
+        SendMessageRequest sendMsgRequest = new SendMessageRequest()
+                .withQueueUrl(queueUrl)
+                .withMessageBody("hello world");
+        client.sendMessage(sendMsgRequest);
+
+
+        String initialHeartBeat = getLastHeartbeatTimestamp();
+
+        // Should skip call to heartbeatToQueue and not update LAST_HEARTBEAT_TIMESTAMP_TAG
+        client.sendMessage(sendMsgRequest);
+
+        String notUpdatedHeartbeat = getLastHeartbeatTimestamp();
+
+        Assert.assertEquals(initialHeartBeat, notUpdatedHeartbeat);
     }
     
     @Test
