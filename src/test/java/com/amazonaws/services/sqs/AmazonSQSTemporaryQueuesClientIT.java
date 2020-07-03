@@ -54,7 +54,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     @Test
     public void createQueueWithUnsupportedIdleQueueRetentionPeriod() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            setupClient(500L);
+            setupClient(-10L);
         });
     }
 
