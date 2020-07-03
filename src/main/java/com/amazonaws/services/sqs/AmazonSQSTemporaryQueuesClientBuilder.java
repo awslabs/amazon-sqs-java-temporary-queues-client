@@ -38,16 +38,16 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
         return this;
     }
 
-    public long getQueueRetentionPeriodSeconds() {
-        return requesterBuilder.getQueueRetentionPeriodSeconds();
+    public long getIdleQueueRetentionPeriodSeconds() {
+        return requesterBuilder.getIdleQueueRetentionPeriodSeconds();
     }
 
-    public void setQueueRetentionPeriodSeconds(long queueRetentionPeriodSeconds) {
-        requesterBuilder.setQueueRetentionPeriodSeconds(queueRetentionPeriodSeconds);
+    public void setIdleQueueRetentionPeriodSeconds(long queueRetentionPeriodSeconds) {
+        requesterBuilder.setIdleQueueRetentionPeriodSeconds(queueRetentionPeriodSeconds);
     }
 
-    public AmazonSQSTemporaryQueuesClientBuilder withQueueRetentionPeriodSeconds(long queueRetentionPeriodSeconds) {
-        setQueueRetentionPeriodSeconds(queueRetentionPeriodSeconds);
+    public AmazonSQSTemporaryQueuesClientBuilder withIdleQueueRetentionPeriodSeconds(long idleQueueRetentionPeriodSeconds) {
+        setIdleQueueRetentionPeriodSeconds(idleQueueRetentionPeriodSeconds);
         return this;
     }
 

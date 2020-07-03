@@ -33,7 +33,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     
     @Test
     public void createQueueAddsAttributes() {
-        createQueue(null);
+        createQueueShouldSetRetentionPeriod(null);
     }
 
     @Test
@@ -48,7 +48,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     @Test
     public void createQueueConfigurableIdleQueueRetentionPeriod() {
-        createQueue(200L);
+        createQueueShouldSetRetentionPeriod(200L);
     }
 
     @Test
@@ -60,23 +60,19 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     private void setupClient(Long idleQueueRetentionPeriod) {
         AmazonSQSRequesterClientBuilder requesterBuilder;
+
+        requesterBuilder =
+                AmazonSQSRequesterClientBuilder.standard()
+                        .withAmazonSQS(sqs)
+                        .withInternalQueuePrefix(queueNamePrefix);
         if (idleQueueRetentionPeriod != null) {
-            requesterBuilder =
-                    AmazonSQSRequesterClientBuilder.standard()
-                            .withAmazonSQS(sqs)
-                            .withInternalQueuePrefix(queueNamePrefix)
-                            .withQueueRetentionPeriodSeconds(idleQueueRetentionPeriod);
-        } else {
-            requesterBuilder =
-                    AmazonSQSRequesterClientBuilder.standard()
-                            .withAmazonSQS(sqs)
-                            .withInternalQueuePrefix(queueNamePrefix);
+            requesterBuilder = requesterBuilder.withIdleQueueRetentionPeriodSeconds(idleQueueRetentionPeriod);
         }
 
         client = AmazonSQSTemporaryQueuesClient.make(requesterBuilder);
     }
 
-    private void createQueue(Long idleQueueRetentionPeriod) {
+    private void createQueueShouldSetRetentionPeriod(Long idleQueueRetentionPeriod) {
         setupClient(idleQueueRetentionPeriod);
         idleQueueRetentionPeriod = (idleQueueRetentionPeriod != null) ? idleQueueRetentionPeriod : 300L;
         queueUrl = client.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
