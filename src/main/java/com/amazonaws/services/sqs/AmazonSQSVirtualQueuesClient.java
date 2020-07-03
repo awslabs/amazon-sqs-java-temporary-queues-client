@@ -93,6 +93,9 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     // This is currently only relevant for receives, since all operations on virtual queues
     // are handled locally and heartbeats are cheap. Only receives have any wait time and therefore
     // need to heartbeat *during* the operation.
+    // An alternative approach would be to remove the expiration scheduled task during the receive
+    // and restore it afterwards, but I prefer the hearbeating approach because it guards against
+    // threads dying or deadlocking.
     private final long heartbeatIntervalSeconds;
 
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
