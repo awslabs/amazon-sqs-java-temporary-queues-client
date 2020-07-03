@@ -80,14 +80,17 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         } catch (NullPointerException npe) {
             fail("NPE not expected with null WaitTimeSeconds on ReceiveMessageRequest");
         }
+
+        // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
+        client.deleteQueue(virtualQueueUrl);
     }
 
     @Test
-    public void expiringVirtualQueueDuringLongReceive() throws InterruptedException {
+    public void virtualQueueShouldNotExpireDuringLongReceive() throws InterruptedException {
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName("ShortLived")
                 .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "5");
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
 
         // Do a single long receive call, longer than the retention period.
@@ -100,6 +103,9 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
 
         // Ensure the queue still exists
         client.sendMessage(virtualQueueUrl, "Boy I'm sure glad you didn't get deleted");
-        assertEquals(1, client.receiveMessage(virtualQueueUrl).getMessages().size());
+        assertEquals(1, client.receiveMessage(receiveRequest).getMessages().size());
+
+        // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
+        client.deleteQueue(virtualQueueUrl);
     }
 }
