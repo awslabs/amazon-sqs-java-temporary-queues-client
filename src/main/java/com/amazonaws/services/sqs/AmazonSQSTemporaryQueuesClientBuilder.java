@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSTemporaryQueuesClientBuilder {
 
-    public final static long QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT = 300;
+    public final static long IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT = 300;
 
     private AmazonSQSRequesterClientBuilder requesterBuilder = AmazonSQSRequesterClientBuilder.standard();
     

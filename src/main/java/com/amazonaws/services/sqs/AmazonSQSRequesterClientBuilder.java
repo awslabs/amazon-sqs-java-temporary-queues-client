@@ -17,7 +17,7 @@ public class AmazonSQSRequesterClientBuilder {
     private int idleQueueSweepingPeriod = 5;
     private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
-    private long idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
+    private long idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
     
     private AmazonSQSRequesterClientBuilder() {
     }

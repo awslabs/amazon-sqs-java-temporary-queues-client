@@ -66,7 +66,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
             AmazonSQSIdleQueueDeletingClient.checkQueueRetentionPeriodBounds(idleQueueRetentionPeriodSeconds);
             this.idleQueueRetentionPeriodSeconds = idleQueueRetentionPeriodSeconds;
         } else {
-            this.idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
+            this.idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
         }
     }
     
