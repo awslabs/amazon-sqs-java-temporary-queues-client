@@ -297,7 +297,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         QueueMetadata queueMetadata = queues.get(queueUrl);
         if (queueMetadata != null) {
             Long lastHeartbeat = queueMetadata.heartbeatTimestamp;
-            if (lastHeartbeat != null && (System.currentTimeMillis() - lastHeartbeat) < 2 * heartbeatIntervalSeconds * 1000) {
+            if (lastHeartbeat != null && (System.currentTimeMillis() - lastHeartbeat) < heartbeatIntervalSeconds * 1000) {
                 return;
             }
             heartbeatToQueue(queueUrl);

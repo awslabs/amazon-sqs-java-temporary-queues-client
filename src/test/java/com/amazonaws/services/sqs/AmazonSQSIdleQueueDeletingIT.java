@@ -19,8 +19,6 @@ import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
-import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG;
-
 
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
@@ -77,10 +75,10 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
-        SendMessageRequest send_msg_request = new SendMessageRequest()
+        SendMessageRequest sendMsgRequest = new SendMessageRequest()
                 .withQueueUrl(queueUrl)
                 .withMessageBody("hello world");
-        client.sendMessage(send_msg_request);
+        client.sendMessage(sendMsgRequest);
 
         String initialHeartBeat = getLastHeartbeatTimestamp();
 
@@ -88,7 +86,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         // so that heartbeatToQueueIfNecessary calls
         // heartbeatToQueue and update LAST_HEARTBEAT_TIMESTAMP_TAG
         TimeUnit.SECONDS.sleep(10);
-        client.sendMessage(send_msg_request);
+        client.sendMessage(sendMsgRequest);
 
         String updatedHeartbeat = getLastHeartbeatTimestamp();
 
@@ -99,7 +97,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         return client
                 .listQueueTags(queueUrl)
                 .getTags()
-                .get(LAST_HEARTBEAT_TIMESTAMP_TAG);
+                .get(AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG);
     }
 
     @Test
@@ -109,16 +107,16 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
-        SendMessageRequest send_msg_request = new SendMessageRequest()
+        SendMessageRequest sendMsgRequest = new SendMessageRequest()
                 .withQueueUrl(queueUrl)
                 .withMessageBody("hello world");
-        client.sendMessage(send_msg_request);
+        client.sendMessage(sendMsgRequest);
 
 
         String initialHeartBeat = getLastHeartbeatTimestamp();
 
         // Should skip call to heartbeatToQueue and not update LAST_HEARTBEAT_TIMESTAMP_TAG
-        client.sendMessage(send_msg_request);
+        client.sendMessage(sendMsgRequest);
 
         String notUpdatedHeartbeat = getLastHeartbeatTimestamp();
 
