@@ -17,6 +17,7 @@ public class AmazonSQSRequesterClientBuilder {
     private int idleQueueSweepingPeriod = 5;
     private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
+    private long idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
     
     private AmazonSQSRequesterClientBuilder() {
     }
@@ -89,6 +90,19 @@ public class AmazonSQSRequesterClientBuilder {
         return this;
     }
 
+    public long getIdleQueueRetentionPeriodSeconds() {
+        return idleQueueRetentionPeriodSeconds;
+    }
+
+    public void setIdleQueueRetentionPeriodSeconds(long idleQueueRetentionPeriodSeconds) {
+        this.idleQueueRetentionPeriodSeconds = idleQueueRetentionPeriodSeconds;
+    }
+
+    public AmazonSQSRequesterClientBuilder withIdleQueueRetentionPeriodSeconds(long idleQueueRetentionPeriodSeconds) {
+        setIdleQueueRetentionPeriodSeconds(idleQueueRetentionPeriodSeconds);
+        return this;
+    }
+
     public long getQueueHeartbeatInterval() {
         return queueHeartbeatInterval;
     }
@@ -105,4 +119,5 @@ public class AmazonSQSRequesterClientBuilder {
     public AmazonSQSRequester build() {
         return AmazonSQSTemporaryQueuesClient.make(this).getRequester();
     }
+
 }

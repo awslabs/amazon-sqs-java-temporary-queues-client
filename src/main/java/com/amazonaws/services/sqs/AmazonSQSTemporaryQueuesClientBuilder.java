@@ -5,6 +5,8 @@ import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSTemporaryQueuesClientBuilder {
 
+    public final static long IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT = 300;
+
     private AmazonSQSRequesterClientBuilder requesterBuilder = AmazonSQSRequesterClientBuilder.standard();
     
     private AmazonSQSTemporaryQueuesClientBuilder() {
@@ -33,6 +35,19 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
     
     public AmazonSQSTemporaryQueuesClientBuilder withQueuePrefix(String queuePrefix) {
         setQueuePrefix(queuePrefix);
+        return this;
+    }
+
+    public long getIdleQueueRetentionPeriodSeconds() {
+        return requesterBuilder.getIdleQueueRetentionPeriodSeconds();
+    }
+
+    public void setIdleQueueRetentionPeriodSeconds(long queueRetentionPeriodSeconds) {
+        requesterBuilder.setIdleQueueRetentionPeriodSeconds(queueRetentionPeriodSeconds);
+    }
+
+    public AmazonSQSTemporaryQueuesClientBuilder withIdleQueueRetentionPeriodSeconds(long idleQueueRetentionPeriodSeconds) {
+        setIdleQueueRetentionPeriodSeconds(idleQueueRetentionPeriodSeconds);
         return this;
     }
 
