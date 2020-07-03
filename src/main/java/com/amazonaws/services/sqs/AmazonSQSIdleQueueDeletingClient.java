@@ -70,7 +70,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     // Publicly visible constants
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
     public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
-    public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT = TimeUnit.MINUTES.toSeconds(5);
     public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
     public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 1;
 
@@ -97,7 +96,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private static ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
             new DaemonThreadFactory("AmazonSQSIdleQueueDeletingClient"));
-    private static long maxIdleQueueRetentionPeriodSeconds = MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
 
     private final String queueNamePrefix;
     private final long heartbeatIntervalSeconds;
@@ -225,23 +223,11 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
     
     static long checkQueueRetentionPeriodBounds(long retentionPeriod) {
-        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS ||
-                retentionPeriod > maxIdleQueueRetentionPeriodSeconds) {
+        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
             throw new IllegalArgumentException("The " + IDLE_QUEUE_RETENTION_PERIOD + 
-                    " attribute must be between " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS +
-                    " and " + maxIdleQueueRetentionPeriodSeconds + " seconds");
+                    " attribute bigger or equal to " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
         }
         return retentionPeriod;
-    }
-
-    public static void setMaxIdleQueueRetentionPeriod(long maxIdleQueueRetentionPeriodSeconds) {
-        if (maxIdleQueueRetentionPeriodSeconds <= MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
-            throw new IllegalArgumentException("Maximum Idle Queue Retention Period: " +
-                    maxIdleQueueRetentionPeriodSeconds +
-                    " must be greater than " +
-                    MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS);
-        }
-        AmazonSQSIdleQueueDeletingClient.maxIdleQueueRetentionPeriodSeconds = maxIdleQueueRetentionPeriodSeconds;
     }
     
     @Override
