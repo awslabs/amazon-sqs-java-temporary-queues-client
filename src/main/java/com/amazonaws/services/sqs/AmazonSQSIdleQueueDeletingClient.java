@@ -70,7 +70,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     // Publicly visible constants
     public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
     public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
-    public static final long MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = TimeUnit.MINUTES.toSeconds(5);
     public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
     public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 1;
 
@@ -224,11 +223,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
     
     static long checkQueueRetentionPeriodBounds(long retentionPeriod) {
-        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS ||
-                retentionPeriod > MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
+        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
             throw new IllegalArgumentException("The " + IDLE_QUEUE_RETENTION_PERIOD + 
-                    " attribute must be between " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS +
-                    " and " + MAXIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
+                    " attribute bigger or equal to " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
         }
         return retentionPeriod;
     }
