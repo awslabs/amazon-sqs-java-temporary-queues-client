@@ -17,6 +17,8 @@ public class AmazonSQSVirtualQueuesClientBuilder {
 
     private int maxWaitTimeSeconds = 20;
 
+    private long heartbeatIntervalSeconds = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+
     private AmazonSQSVirtualQueuesClientBuilder() {
     }
 
@@ -121,6 +123,19 @@ public class AmazonSQSVirtualQueuesClientBuilder {
         return this;
     }
 
+    public long getHeartbeatIntervalSeconds() {
+        return heartbeatIntervalSeconds;
+    }
+
+    public void setHeartbeatIntervalSeconds(long heartbeatIntervalSeconds) {
+        this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+    }
+
+    public AmazonSQSVirtualQueuesClientBuilder withHeartbeatIntervalSeconds(long heartbeatIntervalSeconds) {
+        setHeartbeatIntervalSeconds(heartbeatIntervalSeconds);
+        return this;
+    }
+
     /**
      * @return Create new instance of builder with all defaults set.
      */
@@ -130,6 +145,6 @@ public class AmazonSQSVirtualQueuesClientBuilder {
 
     public AmazonSQS build() {
         return new AmazonSQSVirtualQueuesClient(amazonSQS, messageHandler, orphanedMessageHandler,
-                                                hostQueuePollingThreads, maxWaitTimeSeconds);
+                                                hostQueuePollingThreads, maxWaitTimeSeconds, heartbeatIntervalSeconds);
     }
 }
