@@ -41,7 +41,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -90,6 +90,14 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final int maxWaitTimeSeconds;
 
+    // This is currently only relevant for receives, since all operations on virtual queues
+    // are handled locally and heartbeats are cheap. Only receives have any wait time and therefore
+    // need to heartbeat *during* the operation.
+    // An alternative approach would be to remove the expiration scheduled task during the receive
+    // and restore it afterwards, but I prefer the hearbeating approach because it guards against
+    // threads dying or deadlocking.
+    private final long heartbeatIntervalSeconds;
+
     private static final String VIRTUAL_QUEUE_NAME_ATTRIBUTE = "__AmazonSQSVirtualQueuesClient.QueueName";
 
     static final BiConsumer<String, Message> DEFAULT_ORPHANED_MESSAGE_HANDLER = (queueName, message) -> {
@@ -120,12 +128,14 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     AmazonSQSVirtualQueuesClient(AmazonSQS amazonSqsToBeExtended,
                                  Optional<BiConsumer<String, Message>> messageHandlerOptional,
                                  BiConsumer<String, Message> orphanedMessageHandler,
-                                 int hostQueuePollingThreads, int maxWaitTimeSeconds) {
+                                 int hostQueuePollingThreads, int maxWaitTimeSeconds,
+                                 long heartbeatIntervalSeconds) {
         super(amazonSqsToBeExtended);
         this.messageHandlerOptional = Objects.requireNonNull(messageHandlerOptional);
         this.orphanedMessageHandler = Objects.requireNonNull(orphanedMessageHandler);
         this.hostQueuePollingThreads = hostQueuePollingThreads;
         this.maxWaitTimeSeconds = maxWaitTimeSeconds;
+        this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
     }
 
     private Optional<VirtualQueue> getVirtualQueue(String queueUrl) {
@@ -348,10 +358,22 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             heartbeat();
             try {
                 try {
-                    return receiveBuffer.receiveMessageAsync(request)
-                                        .get(Optional.ofNullable(request.getWaitTimeSeconds()).orElse(0).longValue(), TimeUnit.SECONDS);
-                } catch (TimeoutException e) {
-                    // Fall through to an empty receive
+                    Future<ReceiveMessageResult> future = receiveBuffer.receiveMessageAsync(request);
+                    long waitTimeSeconds = Optional.ofNullable(request.getWaitTimeSeconds()).orElse(0).longValue();
+                    // Necessary to ensure the loop terminates
+                    if (waitTimeSeconds < 0) {
+                        throw new IllegalArgumentException("WaitTimeSeconds cannot be negative: " + waitTimeSeconds);
+                    }
+                    do {
+                        long waitTimeBeforeHeartBeat = Math.min(heartbeatIntervalSeconds, waitTimeSeconds);
+                        try {
+                            return future.get(waitTimeBeforeHeartBeat, TimeUnit.SECONDS);
+                        } catch (TimeoutException e) {
+                            // Fall through
+                        }
+                        heartbeat();
+                        waitTimeSeconds -= waitTimeBeforeHeartBeat;
+                    } while (waitTimeSeconds > 0);
                 } catch (ExecutionException e) {
                     throw (RuntimeException)e.getCause();
                 } catch (InterruptedException e) {
@@ -376,7 +398,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         public void heartbeat() {
             expireFuture.ifPresent(f -> f.cancel(false));
             expireFuture = retentionPeriod.map(period ->
-                    executor.schedule(() -> AmazonSQSVirtualQueuesClient.this.deleteQueue(id.getQueueUrl()), period, TimeUnit.SECONDS));
+                    executor.schedule(this::deleteIdleQueue, period, TimeUnit.SECONDS));
         }
         
         public DeleteQueueResult deleteQueue() {
@@ -385,7 +407,12 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             expireFuture.ifPresent(f -> f.cancel(false));
             return new DeleteQueueResult();
         }
-        
+
+        private void deleteIdleQueue() {
+            LOG.info("Deleting idle virtual queue: " + id.getQueueUrl());
+            deleteQueue();
+        }
+
         public TagQueueResult tagQueue(TagQueueRequest request) {
             tags.putAll(request.getTags());
             return new TagQueueResult();
