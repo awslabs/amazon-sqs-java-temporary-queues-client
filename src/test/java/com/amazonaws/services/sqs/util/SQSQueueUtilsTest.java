@@ -28,7 +28,8 @@ public class SQSQueueUtilsTest {
                 .withDelaySeconds(5)
                 .withMessageAttributes(Collections.emptyMap())
                 .withMessageDeduplicationId("dedup")
-                .withMessageGroupId("groupId");
+                .withMessageGroupId("groupId")
+                .withMessageSystemAttributes(Collections.emptyMap());
 
         SendMessageRequest sendMessageRequestCopy =
                 SQSQueueUtils.copyWithExtraAttributes(sendMessageRequest, Collections.emptyMap());
@@ -48,7 +49,8 @@ public class SQSQueueUtilsTest {
 
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName("queueName")
-                .withAttributes(Collections.emptyMap());
+                .withAttributes(Collections.emptyMap())
+                .withTags(Collections.emptyMap());
 
         CreateQueueRequest createQueueRequestCopy =
                 SQSQueueUtils.copyWithExtraAttributes(createQueueRequest, Collections.emptyMap());
