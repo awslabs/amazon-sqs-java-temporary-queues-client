@@ -6,11 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import com.amazonaws.services.sqs.model.QueueNameExistsException;
@@ -189,26 +185,17 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         if (!queueName.startsWith(queueNamePrefix)) {
             throw new IllegalArgumentException();
         }
+
         String retentionPeriodString = retentionPeriod.get().toString();
-        int retry = 0;
+        long currentTimestamp = System.currentTimeMillis();
         CreateQueueRequest superRequest = request.clone()
                 .withQueueName(queueName)
                 .withAttributes(attributes)
-                .addTagsEntry(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString);
+                .addTagsEntry(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString)
+                .addTagsEntry(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
 
         CreateQueueResult result = super.createQueue(superRequest);
         String queueUrl = result.getQueueUrl();
-
-        // In case of throttling issues retry tagging the queue
-        while (retry++ < 5 && !listQueueTags(queueUrl).getTags().containsKey(IDLE_QUEUE_RETENTION_PERIOD_TAG)) {
-            try {
-                TimeUnit.SECONDS.sleep(1);
-                amazonSqsToBeExtended.tagQueue(queueUrl,
-                        Collections.singletonMap(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString));
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
         List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
@@ -219,9 +206,9 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
         queues.put(queueUrl, metadata);
 
-        String finalQueueUrl = queueUrl;
-        metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(finalQueueUrl),
-                (long) (Math.random() * 5), heartbeatIntervalSeconds, TimeUnit.SECONDS);
+        long initialDelay = ThreadLocalRandom.current().nextLong(heartbeatIntervalSeconds);
+        metadata.heartbeater = executor.scheduleAtFixedRate(() -> heartbeatToQueue(queueUrl),
+                initialDelay, heartbeatIntervalSeconds, TimeUnit.SECONDS);
 
         return result;
     }
