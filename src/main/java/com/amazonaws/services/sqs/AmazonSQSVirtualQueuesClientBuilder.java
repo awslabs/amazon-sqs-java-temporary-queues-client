@@ -5,6 +5,7 @@ import com.amazonaws.services.sqs.model.Message;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
+@SuppressWarnings("OptionalUsedAsFieldOrParameterType")
 public class AmazonSQSVirtualQueuesClientBuilder {
 
     private AmazonSQS amazonSQS;
@@ -53,7 +54,6 @@ public class AmazonSQSVirtualQueuesClientBuilder {
      * Note that this callback will be invoked by internal threads managed by this client. It is <b>strongly recommended</b>
      * that this callback does not do significant processing or blocking operations, as this may delay the delivery
      * of other virtual queue messages!
-     * @return
      */
     public void setMessageHandler(Optional<BiConsumer<String, Message>> messageHandler) {
         this.messageHandler = messageHandler;
@@ -83,7 +83,6 @@ public class AmazonSQSVirtualQueuesClientBuilder {
      * Note that this callback will be invoked by internal threads managed by this client. It is <b>strongly recommended</b>
      * that this callback does not do significant processing or blocking operations, as this may delay the delivery
      * of other virtual queue messages!
-     * @return
      */
     public void setOrphanedMessageHandler(BiConsumer<String, Message> orphanedMessageHandler) {
         this.orphanedMessageHandler = orphanedMessageHandler;

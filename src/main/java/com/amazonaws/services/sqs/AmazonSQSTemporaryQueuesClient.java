@@ -80,6 +80,7 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         AmazonSQS virtualizer = AmazonSQSVirtualQueuesClientBuilder.standard()
                 .withAmazonSQS(deleter)
                 .withHeartbeatIntervalSeconds(builder.getQueueHeartbeatInterval())
+                .withMaxWaitTimeSeconds(builder.getMaxWaitTimeSeconds())
                 .build();
         AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix(), builder.getIdleQueueRetentionPeriodSeconds());
         AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());

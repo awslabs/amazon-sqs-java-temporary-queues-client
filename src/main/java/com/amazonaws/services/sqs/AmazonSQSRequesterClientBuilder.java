@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSRequesterClientBuilder {
 
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     private Optional<AmazonSQS> customSQS = Optional.empty();
 
     private String internalQueuePrefix = "__RequesterClientQueues__";
@@ -18,6 +19,7 @@ public class AmazonSQSRequesterClientBuilder {
     private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     private long idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
+    private int maxWaitTimeSeconds = 20;
     
     private AmazonSQSRequesterClientBuilder() {
     }
@@ -113,6 +115,19 @@ public class AmazonSQSRequesterClientBuilder {
 
     public AmazonSQSRequesterClientBuilder withQueueHeartbeatInterval(long heartbeatIntervalSeconds) {
         setQueueHeartbeatInterval(heartbeatIntervalSeconds);
+        return this;
+    }
+
+    public int getMaxWaitTimeSeconds() {
+        return maxWaitTimeSeconds;
+    }
+
+    public void setMaxWaitTimeSeconds(int maxWaitTimeSeconds) {
+        this.maxWaitTimeSeconds = maxWaitTimeSeconds;
+    }
+
+    public AmazonSQSRequesterClientBuilder withMaxWaitTimeSeconds(int maxWaitTimeSeconds) {
+        setMaxWaitTimeSeconds(maxWaitTimeSeconds);
         return this;
     }
 
