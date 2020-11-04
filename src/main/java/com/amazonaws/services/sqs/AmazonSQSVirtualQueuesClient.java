@@ -288,7 +288,13 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         }
 
         private void dispatchMessage(Message message) {
-            String queueName = message.getMessageAttributes().get(VIRTUAL_QUEUE_NAME_ATTRIBUTE).getStringValue();
+            MessageAttributeValue messageAttributeValue = message.getMessageAttributes().get(VIRTUAL_QUEUE_NAME_ATTRIBUTE);
+            // Case where a message was sent with missing attribute __AmazonSQSVirtualQueuesClient.QueueName
+            if (messageAttributeValue == null) {
+                orphanedMessageHandler.accept(queueUrl, message);
+                return;
+            }
+            String queueName = messageAttributeValue.getStringValue();
             VirtualQueue virtualQueue = virtualQueues.get(queueName);
             if (virtualQueue != null) {
                 messageHandlerOptional.map(messageHandler -> {

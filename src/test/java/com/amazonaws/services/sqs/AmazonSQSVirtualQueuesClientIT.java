@@ -3,16 +3,15 @@ package com.amazonaws.services.sqs;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.sqs.model.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 
 public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
@@ -43,7 +42,7 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
                 .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
                 .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
-        
+
         // Do a few long poll receives and validate the queue stays alive.
         // We expect empty receives but not errors.
         ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
@@ -107,5 +106,26 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
 
         // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
         client.deleteQueue(virtualQueueUrl);
+    }
+
+    @Test
+    public void missingMessageAttributeIsReceivedAndDeleted() throws InterruptedException {
+        CreateQueueRequest request = new CreateQueueRequest()
+                .withQueueName("ShortLived")
+                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
+        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+
+        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
+                .withQueueUrl(virtualQueueUrl)
+                .withWaitTimeSeconds(5);
+        SendMessageRequest sendMessageRequest = new SendMessageRequest()
+                .withQueueUrl(hostQueueUrl)
+                .withMessageBody("Missing Message attributes!")
+                .withDelaySeconds(5);
+
+        client.sendMessage(sendMessageRequest);
+        // Message sent with missing attribute is deleted
+        assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
     }
 }
