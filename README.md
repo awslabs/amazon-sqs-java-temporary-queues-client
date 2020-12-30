@@ -34,6 +34,6 @@ Temporary queues are also automatically deleted if the clients that created them
 
 ## License
 
-This library is licensed under the Apache 2.0 License. 
+This library is licensed under the Apache 2.0 License. Testing policy change 
 
 See [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for more information.
