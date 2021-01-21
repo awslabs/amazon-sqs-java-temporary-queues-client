@@ -2,12 +2,15 @@ package com.amazonaws.services.sqs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
-import java.util.Collections;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
+import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
@@ -22,9 +25,12 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     private static String hostQueueUrl;
     private static AmazonSQS client;
 
+    BiConsumer<String, Message> orphanedMessageHandlerMock;
+
     @Before
     public void setup() {
-        client = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(sqs).build();
+        orphanedMessageHandlerMock = mock(BiConsumer.class);
+        client = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(sqs).withOrphanedMessageHandler(orphanedMessageHandlerMock).build();
         hostQueueUrl = client.createQueue(queueNamePrefix + "-HostQueue").getQueueUrl();
     }
 
@@ -121,7 +127,7 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
 
         ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
                 .withQueueUrl(virtualQueueUrl)
-                .withWaitTimeSeconds(5);
+                .withWaitTimeSeconds(20);
         SendMessageRequest sendMessageRequest = new SendMessageRequest()
                 .withQueueUrl(hostQueueUrl)
                 .withMessageBody("Missing Message attributes!")
@@ -130,5 +136,6 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         client.sendMessage(sendMessageRequest);
         // Message sent with missing attribute is deleted
         assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+        verify(orphanedMessageHandlerMock).accept(any(), any());
     }
 }
