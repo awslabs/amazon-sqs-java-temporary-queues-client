@@ -26,7 +26,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
 
     private static final long serialVersionUID = 27151245504960185L;
 
-    private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
+    private static final Log LOG = LogFactory.getLog(IdleQueueSweeper.class);
     
     private final SerializableReference<IdleQueueSweeper> thisReference;
     private final Consumer<Exception> exceptionHandler;
