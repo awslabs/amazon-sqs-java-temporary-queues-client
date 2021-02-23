@@ -181,6 +181,10 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
             throw new IllegalStateException("Cannot create virtual queue: the number of virtual queues would exceed the maximum of "
                     + MAXIMUM_VIRTUAL_QUEUES_COUNT);
         }
+
+        TagQueueRequest tagQueueRequest = new TagQueueRequest().withTags(request.getTags());
+        virtualQueue.tagQueue(tagQueueRequest);
+
         virtualQueues.put(virtualQueue.getID().getVirtualQueueName(), virtualQueue);
 
         if (LOG.isDebugEnabled()) {

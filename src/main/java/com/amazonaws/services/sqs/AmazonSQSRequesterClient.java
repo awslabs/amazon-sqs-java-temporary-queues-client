@@ -29,21 +29,23 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     private final AmazonSQS sqs;
     private final String queuePrefix;
     private final Map<String, String> queueAttributes;
+    private final Map<String, String> queueTags;
     private final Consumer<Exception> exceptionHandler;
     
     private final Set<SQSMessageConsumer> responseConsumers = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private Runnable shutdownHook;
     
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
-        this(sqs, queuePrefix, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
+    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes, Map<String, String> queueTags) {
+        this(sqs, queuePrefix, queueAttributes, queueTags, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
     AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,
-                Consumer<Exception> exceptionHandler) {
+                             Map<String, String> queueTags, Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queuePrefix = queuePrefix;
         this.queueAttributes = new HashMap<>(queueAttributes);
+        this.queueTags = new HashMap<>(queueTags);
         this.exceptionHandler = exceptionHandler;
     }
 
@@ -66,7 +68,8 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         String queueName = queuePrefix + UUID.randomUUID().toString();
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueName)
-                .withAttributes(queueAttributes);
+                .withAttributes(queueAttributes)
+                .withTags(queueTags);
         String responseQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest requestWithResponseUrl = SQSQueueUtils.copyWithExtraAttributes(request,

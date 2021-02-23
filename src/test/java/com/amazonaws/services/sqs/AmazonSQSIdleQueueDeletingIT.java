@@ -31,7 +31,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     public void setup() {
         client = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
-                Collections.emptyMap(), exceptionHandler);
+                Collections.emptyMap(), Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
     }
 

@@ -34,7 +34,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
         String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString),
-                exceptionHandler);
+                Collections.emptyMap(), exceptionHandler);
 
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }

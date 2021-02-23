@@ -25,7 +25,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
     @Before
     public void setup() {
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
-                Collections.emptyMap(), exceptionHandler);
+                Collections.emptyMap(), Collections.emptyMap(), exceptionHandler);
         sqsResponder = new AmazonSQSResponderClient(sqs);
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }

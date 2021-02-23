@@ -53,14 +53,16 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private final String prefix;
     private final long idleQueueRetentionPeriodSeconds;
+    private final Map<String, String> queueTags;
 
     private AmazonSQSRequester requester;
 
-    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, Long idleQueueRetentionPeriodSeconds) {
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, Long idleQueueRetentionPeriodSeconds, Map<String, String> queueTags) {
         super(virtualizer);
         this.virtualizer = virtualizer;
         this.deleter = deleter;
         this.prefix = queueNamePrefix + UUID.randomUUID().toString();
+        this.queueTags = queueTags;
 
         if (idleQueueRetentionPeriodSeconds != null) {
             AmazonSQSIdleQueueDeletingClient.checkQueueRetentionPeriodBounds(idleQueueRetentionPeriodSeconds);
@@ -69,9 +71,13 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
             this.idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
         }
     }
+
+    private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix, Long idleQueueRetentionPeriodSeconds) {
+        this(virtualizer, deleter, queueNamePrefix, idleQueueRetentionPeriodSeconds, null);
+    }
     
     private AmazonSQSTemporaryQueuesClient(AmazonSQS virtualizer, AmazonSQSIdleQueueDeletingClient deleter, String queueNamePrefix) {
-        this(virtualizer, deleter, queueNamePrefix, null);
+        this(virtualizer, deleter, queueNamePrefix, null, null);
     }
 
     public static AmazonSQSTemporaryQueuesClient make(AmazonSQSRequesterClientBuilder builder) {
@@ -81,8 +87,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
                 .withAmazonSQS(deleter)
                 .withHeartbeatIntervalSeconds(builder.getQueueHeartbeatInterval())
                 .build();
-        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix(), builder.getIdleQueueRetentionPeriodSeconds());
-        AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes());
+        AmazonSQSTemporaryQueuesClient temporaryQueuesClient = new AmazonSQSTemporaryQueuesClient(virtualizer, deleter, builder.getInternalQueuePrefix(), builder.getIdleQueueRetentionPeriodSeconds(), builder.getQueueTags());
+        AmazonSQSRequesterClient requester = new AmazonSQSRequesterClient(temporaryQueuesClient, builder.getInternalQueuePrefix(), builder.getQueueAttributes(), builder.getQueueTags());
         AmazonSQSResponderClient responder = new AmazonSQSResponderClient(temporaryQueuesClient);
         temporaryQueuesClient.startIdleQueueSweeper(requester, responder,
                 builder.getIdleQueueSweepingPeriod(), builder.getIdleQueueSweepingTimeUnit());
@@ -122,6 +128,11 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
                     + String.join(", ", unsupportedQueueAttributes));
         }
 
+        // Add the tags specified for each Virtual queue
+        Map<String, String> tags = request.getTags();
+        queueTags.forEach(tags::putIfAbsent);
+        request.withTags(tags);
+
         Map<String, String> extraQueueAttributes = new HashMap<>();
         // Add the retention period to both the host queue and each virtual queue
         extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, Long.toString(idleQueueRetentionPeriodSeconds));
@@ -136,7 +147,8 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
         // queue or else the client may think we're trying to set them independently!
         CreateQueueRequest createVirtualQueueRequest = new CreateQueueRequest()
                 .withQueueName(request.getQueueName())
-                .withAttributes(extraQueueAttributes);
+                .withAttributes(extraQueueAttributes)
+                .withTags(tags);
         return amazonSqsToBeExtended.createQueue(createVirtualQueueRequest);
     }
 
