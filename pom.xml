@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.amazonaws</groupId>
   <artifactId>amazon-sqs-java-temporary-queues-client</artifactId>
-  <version>1.2.0</version>
+  <version>1.2.1</version>
   <name>Amazon SQS Java Temporary Queues Client</name>
   <description>An Amazon SQS client that supports creating lightweight, automatically-deleted temporary queues, for use in common messaging patterns such as Request/Response. See http://aws.amazon.com/sqs.</description>
   <url>https://github.com/awslabs/amazon-sqs-java-temporary-queues-client</url>
