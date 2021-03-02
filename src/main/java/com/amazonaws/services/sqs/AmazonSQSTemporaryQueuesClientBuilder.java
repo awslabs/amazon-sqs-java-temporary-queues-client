@@ -1,5 +1,6 @@
 package com.amazonaws.services.sqs;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -65,6 +66,19 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
     
     public AmazonSQSTemporaryQueuesClientBuilder withIdleQueueSweepingPeriod(int period, TimeUnit timeUnit) {
         setIdleQueueSweepingPeriod(period, timeUnit);
+        return this;
+    }
+
+    public Map<String, String> getQueueTags() {
+        return requesterBuilder.getQueueTags();
+    }
+
+    public void setQueueTags(Map<String, String> queueTags) {
+        requesterBuilder.setQueueTags(queueTags);
+    }
+
+    public AmazonSQSTemporaryQueuesClientBuilder withQueueTags(Map<String, String> queueTags) {
+        setQueueTags(queueTags);
         return this;
     }
     

@@ -13,6 +13,7 @@ public class AmazonSQSRequesterClientBuilder {
     private String internalQueuePrefix = "__RequesterClientQueues__";
 
     private Map<String, String> queueAttributes = Collections.emptyMap();
+    private Map<String, String> queueTags = Collections.emptyMap();
 
     private int idleQueueSweepingPeriod = 5;
     private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
@@ -69,6 +70,19 @@ public class AmazonSQSRequesterClientBuilder {
 
     public AmazonSQSRequesterClientBuilder withQueueAttributes(Map<String, String> queueAttributes) {
         setQueueAttributes(queueAttributes);
+        return this;
+    }
+
+    public Map<String, String> getQueueTags() {
+        return Collections.unmodifiableMap(queueTags);
+    }
+
+    public void setQueueTags(Map<String, String> queueTags) {
+        this.queueTags = new HashMap<>(queueTags);
+    }
+
+    public AmazonSQSRequesterClientBuilder withQueueTags(Map<String, String> queueTags) {
+        setQueueTags(queueTags);
         return this;
     }
 

@@ -2,9 +2,12 @@ package com.amazonaws.services.sqs;
 
 import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
 import static com.amazonaws.services.sqs.AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
@@ -37,9 +40,17 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     }
 
     @Test
+    public void createQueueAddsTags() {
+        Map<String, String> tags = new HashMap<>();
+        tags.put("Tag1", "Value1");
+        tags.put("Tag2", "Value2");
+        createQueueShouldSetTags(tags);
+    }
+
+    @Test
     public void createQueueWithUnsupportedAttributes() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            setupClient(null);
+            setupClient(null, new HashMap<>());
             client.createQueue(new CreateQueueRequest()
                     .withQueueName(queueNamePrefix + "InvalidQueue")
                     .withAttributes(Collections.singletonMap(QueueAttributeName.FifoQueue.name(), "true")));
@@ -54,17 +65,18 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     @Test
     public void createQueueWithUnsupportedIdleQueueRetentionPeriod() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
-            setupClient(-10L);
+            setupClient(-10L, new HashMap<>());
         });
     }
 
-    private void setupClient(Long idleQueueRetentionPeriod) {
+    private void setupClient(Long idleQueueRetentionPeriod, Map<String, String> tags) {
         AmazonSQSRequesterClientBuilder requesterBuilder;
 
         requesterBuilder =
                 AmazonSQSRequesterClientBuilder.standard()
                         .withAmazonSQS(sqs)
-                        .withInternalQueuePrefix(queueNamePrefix);
+                        .withInternalQueuePrefix(queueNamePrefix)
+                        .withQueueTags(tags);
         if (idleQueueRetentionPeriod != null) {
             requesterBuilder = requesterBuilder.withIdleQueueRetentionPeriodSeconds(idleQueueRetentionPeriod);
         }
@@ -73,7 +85,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     }
 
     private void createQueueShouldSetRetentionPeriod(Long idleQueueRetentionPeriod) {
-        setupClient(idleQueueRetentionPeriod);
+        setupClient(idleQueueRetentionPeriod, new HashMap<>());
         idleQueueRetentionPeriod = (idleQueueRetentionPeriod != null) ? idleQueueRetentionPeriod : 300L;
         queueUrl = client.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
         Map<String, String> attributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
@@ -83,5 +95,16 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
         Map<String, String> hostQueueAttributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
         Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD));
+    }
+
+    private void createQueueShouldSetTags(Map<String, String> tags) {
+        setupClient(null, tags);
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest().withQueueName(queueNamePrefix + "TestQueue");
+        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        Map<String, String> actualTags = client.listQueueTags(queueUrl).getTags();
+        tags.forEach((k, v) -> {
+            assertTrue(actualTags.containsKey(k));
+            assertEquals(v, actualTags.get(k));
+        });
     }
 }

@@ -64,7 +64,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
     @Before
     public void setup() {
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
-                Collections.emptyMap(), exceptionHandler);
+                Collections.emptyMap(), Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
         queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
         tasksRemaining = new AtomicInteger(1);
