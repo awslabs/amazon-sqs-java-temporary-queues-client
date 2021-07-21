@@ -1,7 +1,7 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
-import static com.amazonaws.services.sqs.AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE;
+import static com.amazonaws.services.sqs.util.Constants.IDLE_QUEUE_RETENTION_PERIOD;
+import static com.amazonaws.services.sqs.util.Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE;
 import static org.junit.Assert.assertNotNull;
 
 import java.util.Collections;
@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
+import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
@@ -82,6 +83,6 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
         Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), attributes.get(IDLE_QUEUE_RETENTION_PERIOD));
 
         Map<String, String> hostQueueAttributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
-        Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD));
+        Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(Constants.IDLE_QUEUE_RETENTION_PERIOD));
     }
 }

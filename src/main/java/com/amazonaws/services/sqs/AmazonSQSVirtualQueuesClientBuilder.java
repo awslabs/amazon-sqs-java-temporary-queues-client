@@ -1,6 +1,7 @@
 package com.amazonaws.services.sqs;
 
 import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.util.Constants;
 
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -17,7 +18,7 @@ public class AmazonSQSVirtualQueuesClientBuilder {
 
     private int maxWaitTimeSeconds = 20;
 
-    private long heartbeatIntervalSeconds = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+    private long heartbeatIntervalSeconds = Constants.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
 
     private AmazonSQSVirtualQueuesClientBuilder() {
     }

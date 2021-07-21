@@ -24,6 +24,7 @@ import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
@@ -49,7 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
-import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD;
+import static com.amazonaws.services.sqs.util.Constants.IDLE_QUEUE_RETENTION_PERIOD;
 
 /**
  * An AmazonSQS wrapper that adds support for "virtual" queues, which are logical
@@ -80,8 +81,6 @@ import static com.amazonaws.services.sqs.AmazonSQSIdleQueueDeletingClient.IDLE_Q
 class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSVirtualQueuesClient.class);
-
-    public static final String VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE = "HostQueueUrl";
 
     // This is just protection against bad logic that creates unbounded queues.
     public static final int MAXIMUM_VIRTUAL_QUEUES_COUNT = 1_000_000;
@@ -154,13 +153,13 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
     
     @Override
     public CreateQueueResult createQueue(CreateQueueRequest request) {
-        String hostQueueUrl = request.getAttributes().get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        String hostQueueUrl = request.getAttributes().get(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
         if (hostQueueUrl == null) {
             return amazonSqsToBeExtended.createQueue(request);
         }
 
         Map<String, String> attributes = new HashMap<>(request.getAttributes());
-        attributes.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
+        attributes.remove(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
 
         Optional<Long> retentionPeriod = AmazonSQSIdleQueueDeletingClient.getRetentionPeriod(attributes);
 
@@ -341,7 +340,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
         public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
             List<String> attributeNames = request.getAttributeNames();
             boolean includeHostQueue = 
-                    attributeNames.remove(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE) ||
+                    attributeNames.remove(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE) ||
                     attributeNames.contains("All");
             boolean includeRetentionPeriod = retentionPeriod.isPresent() && 
                     (attributeNames.contains(IDLE_QUEUE_RETENTION_PERIOD) ||
@@ -352,7 +351,7 @@ class AmazonSQSVirtualQueuesClient extends AbstractAmazonSQSClientWrapper {
                     .withAttributeNames(attributeNames);
             GetQueueAttributesResult result = amazonSqsToBeExtended.getQueueAttributes(hostQueueRequest);
             if (includeHostQueue) {
-                result.getAttributes().put(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueue.queueUrl);
+                result.getAttributes().put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueue.queueUrl);
             }
             if (includeRetentionPeriod) {
                 result.getAttributes().put(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriod.get().toString());

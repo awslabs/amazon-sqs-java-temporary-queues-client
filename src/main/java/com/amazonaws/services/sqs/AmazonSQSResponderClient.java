@@ -1,5 +1,6 @@
 package com.amazonaws.services.sqs;
 
+import com.amazonaws.services.sqs.util.Constants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -24,7 +25,7 @@ class AmazonSQSResponderClient implements AmazonSQSResponder {
     
     @Override
     public void sendResponseMessage(MessageContent request, MessageContent response) {
-        MessageAttributeValue attribute = request.getMessageAttributes().get(AmazonSQSRequesterClient.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
+        MessageAttributeValue attribute = request.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
 
         if (attribute != null) {
             String replyQueueUrl = attribute.getStringValue();
@@ -45,7 +46,7 @@ class AmazonSQSResponderClient implements AmazonSQSResponder {
 
     @Override
     public boolean isResponseMessageRequested(MessageContent requestMessage) {
-        return requestMessage.getMessageAttributes().containsKey(AmazonSQSRequesterClient.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
+        return requestMessage.getMessageAttributes().containsKey(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME);
     }
     
     @Override

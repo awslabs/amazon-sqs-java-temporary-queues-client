@@ -12,11 +12,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Test;
 
 import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.ExceptionAsserter;
 import com.amazonaws.services.sqs.util.MockSQS;
@@ -59,7 +59,7 @@ public class AmazonSQSRequesterClientTest {
         
         Message requestMessage = sqs.receiveMessage(queueUrl).getMessages().get(0);
         assertEquals(requestMessageBody, requestMessage.getBody());
-        String responseQueueUrl = requestMessage.getMessageAttributes().get(AmazonSQSRequesterClient.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
+        String responseQueueUrl = requestMessage.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
         assertNotNull(responseQueueUrl);
         
         responderClient.sendResponseMessage(MessageContent.fromMessage(requestMessage), new MessageContent(responseMessageBody));
@@ -84,7 +84,7 @@ public class AmazonSQSRequesterClientTest {
         
         Message requestMessage = sqs.receiveMessage(queueUrl).getMessages().get(0);
         assertEquals(requestMessageBody, requestMessage.getBody());
-        String responseQueueUrl = requestMessage.getMessageAttributes().get(AmazonSQSRequesterClient.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
+        String responseQueueUrl = requestMessage.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
         assertNotNull(responseQueueUrl);
         
         // TODO-RS: Junit 5

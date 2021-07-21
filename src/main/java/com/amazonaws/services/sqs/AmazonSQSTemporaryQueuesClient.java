@@ -14,6 +14,7 @@ import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.CreateQueueResult;
 import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
+import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
 /**
@@ -124,14 +125,14 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
 
         Map<String, String> extraQueueAttributes = new HashMap<>();
         // Add the retention period to both the host queue and each virtual queue
-        extraQueueAttributes.put(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, Long.toString(idleQueueRetentionPeriodSeconds));
+        extraQueueAttributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, Long.toString(idleQueueRetentionPeriodSeconds));
         String hostQueueUrl = hostQueueUrls.computeIfAbsent(request.getAttributes(), attributes -> {
             CreateQueueRequest hostQueueCreateRequest = SQSQueueUtils.copyWithExtraAttributes(request, extraQueueAttributes);
             hostQueueCreateRequest.setQueueName(prefix + '-' + hostQueueUrls.size());
             return amazonSqsToBeExtended.createQueue(hostQueueCreateRequest).getQueueUrl();
         });
 
-        extraQueueAttributes.put(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
+        extraQueueAttributes.put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
         // The host queue takes care of all the other queue attributes, so don't specify them when creating the virtual
         // queue or else the client may think we're trying to set them independently!
         CreateQueueRequest createVirtualQueueRequest = new CreateQueueRequest()

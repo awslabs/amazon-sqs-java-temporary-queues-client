@@ -15,6 +15,7 @@ import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
 
@@ -23,9 +24,6 @@ import com.amazonaws.services.sqs.util.SQSQueueUtils;
  * temporary queue for each response message.
  */
 class AmazonSQSRequesterClient implements AmazonSQSRequester {
-
-    public static final String RESPONSE_QUEUE_URL_ATTRIBUTE_NAME = "ResponseQueueUrl";
-
     private final AmazonSQS sqs;
     private final String queuePrefix;
     private final Map<String, String> queueAttributes;
@@ -70,7 +68,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         String responseQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest requestWithResponseUrl = SQSQueueUtils.copyWithExtraAttributes(request,
-                Collections.singletonMap(RESPONSE_QUEUE_URL_ATTRIBUTE_NAME, 
+                Collections.singletonMap(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME,
                         new MessageAttributeValue().withDataType("String").withStringValue(responseQueueUrl)));
         // TODO-RS: Should be using sendMessageAsync
         sqs.sendMessage(requestWithResponseUrl);

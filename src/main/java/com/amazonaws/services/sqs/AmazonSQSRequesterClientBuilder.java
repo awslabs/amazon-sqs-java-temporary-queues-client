@@ -1,5 +1,7 @@
 package com.amazonaws.services.sqs;
 
+import com.amazonaws.services.sqs.util.Constants;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,7 +17,7 @@ public class AmazonSQSRequesterClientBuilder {
     private Map<String, String> queueAttributes = Collections.emptyMap();
 
     private int idleQueueSweepingPeriod = 5;
-    private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+    private long queueHeartbeatInterval = Constants.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     private TimeUnit idleQueueSweepingTimeUnit = TimeUnit.MINUTES;
     private long idleQueueRetentionPeriodSeconds = AmazonSQSTemporaryQueuesClientBuilder.IDLE_QUEUE_RETENTION_PERIOD_SECONDS_DEFAULT;
     

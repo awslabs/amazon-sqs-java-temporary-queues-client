@@ -1,5 +1,7 @@
 package com.amazonaws.services.sqs;
 
+import com.amazonaws.services.sqs.util.Constants;
+
 import java.util.Optional;
 
 public class AmazonSQSResponderClientBuilder {
@@ -7,7 +9,7 @@ public class AmazonSQSResponderClientBuilder {
     private Optional<AmazonSQS> customSQS = Optional.empty();
     
     private String internalQueuePrefix = "__RequesterClientQueues__";
-    private long queueHeartbeatInterval = AmazonSQSIdleQueueDeletingClient.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+    private long queueHeartbeatInterval = Constants.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
     
     private AmazonSQSResponderClientBuilder() {
     }

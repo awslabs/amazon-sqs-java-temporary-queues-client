@@ -6,6 +6,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
 import org.junit.Assert;
@@ -60,7 +61,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         client.startSweeper(requester, responder, 5, TimeUnit.SECONDS, exceptionHandler);
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueNamePrefix + "-IdleQueue")
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "1");
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "1");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
@@ -72,7 +73,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     public void updatedHeartBeatTag() throws InterruptedException {
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueNamePrefix + "-HeartbeatTag")
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest sendMsgRequest = new SendMessageRequest()
@@ -104,7 +105,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     public void notUpdatedHeartBeatTag() throws InterruptedException {
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueNamePrefix + "-HeartbeatTag")
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
         SendMessageRequest sendMsgRequest = new SendMessageRequest()
@@ -128,7 +129,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         String queueName = queueNamePrefix + "-DeletedTooSoon";
         CreateQueueRequest createQueueRequest = new CreateQueueRequest()
                 .withQueueName(queueName)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "60");
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
         queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
 
         QueueUser user = new QueueUser();
