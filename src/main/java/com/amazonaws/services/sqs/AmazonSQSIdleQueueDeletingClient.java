@@ -10,6 +10,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import com.amazonaws.services.sqs.model.QueueNameExistsException;
+import com.amazonaws.services.sqs.util.Constants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -63,12 +64,6 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private static final Log LOG = LogFactory.getLog(AmazonSQSIdleQueueDeletingClient.class);
 
-    // Publicly visible constants
-    public static final String IDLE_QUEUE_RETENTION_PERIOD = "IdleQueueRetentionPeriodSeconds";
-    public static final long MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS = 1;
-    public static final long HEARTBEAT_INTERVAL_SECONDS_DEFAULT = 5;
-    public static final long HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE = 1;
-
     static final String IDLE_QUEUE_RETENTION_PERIOD_TAG = "__IdleQueueRetentionPeriodSeconds";
 
     private static final String SWEEPING_QUEUE_DLQ_SUFFIX = "_DLQ";
@@ -111,15 +106,15 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         this.queueNamePrefix = queueNamePrefix;
 
         if (heartbeatIntervalSeconds != null) {
-            if (heartbeatIntervalSeconds < HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE) {
+            if (heartbeatIntervalSeconds < Constants.HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE) {
                 throw new IllegalArgumentException("Heartbeat Interval Seconds: " +
                         heartbeatIntervalSeconds +
                         " must be equal to or bigger than " +
-                        HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE);
+                        Constants.HEARTBEAT_INTERVAL_SECONDS_MIN_VALUE);
             }
             this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
         } else {
-            this.heartbeatIntervalSeconds = HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
+            this.heartbeatIntervalSeconds = Constants.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
         }
     }
 
@@ -201,7 +196,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
                                                     QueueAttributeName.VisibilityTimeout.toString());
         Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl, attributeNames).getAttributes();
-        createdAttributes.put(IDLE_QUEUE_RETENTION_PERIOD, retentionPeriodString);
+        createdAttributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, retentionPeriodString);
 
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
         queues.put(queueUrl, metadata);
@@ -214,15 +209,15 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
 
     static Optional<Long> getRetentionPeriod(Map<String, String> queueAttributes) {
-        return Optional.ofNullable(queueAttributes.remove(IDLE_QUEUE_RETENTION_PERIOD))
+        return Optional.ofNullable(queueAttributes.remove(Constants.IDLE_QUEUE_RETENTION_PERIOD))
                        .map(Long::parseLong)
                        .map(AmazonSQSIdleQueueDeletingClient::checkQueueRetentionPeriodBounds);
     }
     
     static long checkQueueRetentionPeriodBounds(long retentionPeriod) {
-        if (retentionPeriod < MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
-            throw new IllegalArgumentException("The " + IDLE_QUEUE_RETENTION_PERIOD + 
-                    " attribute bigger or equal to " + MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
+        if (retentionPeriod < Constants.MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS) {
+            throw new IllegalArgumentException("The " + Constants.IDLE_QUEUE_RETENTION_PERIOD +
+                    " attribute bigger or equal to " + Constants.MINIMUM_IDLE_QUEUE_RETENTION_PERIOD_SECONDS + " seconds");
         }
         return retentionPeriod;
     }

@@ -14,6 +14,7 @@ import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,8 +49,8 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     public void expiringVirtualQueue() throws InterruptedException {
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName("ShortLived")
-                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
+                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
 
         // Do a few long poll receives and validate the queue stays alive.
@@ -76,8 +77,8 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     public void ReceiveMessageWaitTimeSecondsNull() {
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName("ReceiveMessageWaitTimeSecondsNull")
-                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "5");
+                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "5");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
 
         // Do Receive message request with null WaitTimeSeconds.
@@ -97,8 +98,8 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     public void virtualQueueShouldNotExpireDuringLongReceive() throws InterruptedException {
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName("ShortLived")
-                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
+                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
 
         // Do a single long receive call, longer than the retention period.
@@ -121,8 +122,8 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     public void missingMessageAttributeIsReceivedAndDeleted() throws InterruptedException {
         CreateQueueRequest request = new CreateQueueRequest()
                 .withQueueName("ShortLived")
-                .addAttributesEntry(AmazonSQSVirtualQueuesClient.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD, "10");
+                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
+                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
         String virtualQueueUrl = client.createQueue(request).getQueueUrl();
 
         ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
