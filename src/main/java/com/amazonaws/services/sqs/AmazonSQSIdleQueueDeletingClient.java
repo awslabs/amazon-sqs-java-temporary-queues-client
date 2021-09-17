@@ -10,6 +10,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import com.amazonaws.services.sqs.model.QueueNameExistsException;
+import com.amazonaws.services.sqs.model.TagQueueRequest;
 import com.amazonaws.services.sqs.util.Constants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -185,12 +186,15 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         long currentTimestamp = System.currentTimeMillis();
         CreateQueueRequest superRequest = request.clone()
                 .withQueueName(queueName)
-                .withAttributes(attributes)
-                .addTagsEntry(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString)
-                .addTagsEntry(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
+                .withAttributes(attributes);
 
         CreateQueueResult result = super.createQueue(superRequest);
         String queueUrl = result.getQueueUrl();
+
+        TagQueueRequest tagQueueRequest = new TagQueueRequest().withQueueUrl(queueUrl)
+                .addTagsEntry(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString)
+                .addTagsEntry(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
+        amazonSqsToBeExtended.tagQueue(tagQueueRequest);
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
         List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
