@@ -4,8 +4,8 @@ import static com.amazonaws.services.sqs.util.SQSQueueUtils.booleanMessageAttrib
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.getBooleanMessageAttributeValue;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.getStringMessageAttributeValue;
 import static com.amazonaws.services.sqs.util.SQSQueueUtils.stringMessageAttributeValue;
-import static com.amazonaws.util.StringUtils.UTF8;
 
+import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,25 +34,29 @@ import com.amazonaws.services.sqs.executors.Deduplicated;
 import com.amazonaws.services.sqs.executors.DefaultSerializer;
 import com.amazonaws.services.sqs.executors.InvertibleFunction;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
-import com.amazonaws.util.BinaryUtils;
-import com.amazonaws.util.Md5Utils;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
+import software.amazon.awssdk.utils.BinaryUtils;
+import software.amazon.awssdk.utils.Md5Utils;
 
 // TODO-RS: Factor out deduplication implementation?
 class SQSExecutorService extends AbstractExecutorService {
 
     // TODO-RS: Configuration
     private static final int MAX_WAIT_TIME_SECONDS = 60;
+    private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private static final long DEDUPLICATION_WINDOW_MILLIS = TimeUnit.MILLISECONDS.convert(20, TimeUnit.MINUTES);
 
     protected final InvertibleFunction<Object, String> serializer;
 
-    protected final AmazonSQS sqs;
+    protected final SqsClient sqs;
     protected final AmazonSQSRequester sqsRequester;
     protected final AmazonSQSResponder sqsResponder;
     protected final String queueUrl;
@@ -154,9 +158,11 @@ class SQSExecutorService extends AbstractExecutorService {
             return System.currentTimeMillis() > expiry;
         }
 
-        public void saveToTag(AmazonSQS sqs, String queueUrl) {
+        public void saveToTag(SqsClient sqs, String queueUrl) {
             String key = deduplicationID.orElse(uuid);
-            sqs.tagQueue(queueUrl, Collections.singletonMap(key, toString()));
+            TagQueueRequest request = TagQueueRequest.builder()
+                    .queueUrl(queueUrl).tags(Collections.singletonMap(key, toString())).build();
+            sqs.tagQueue(request);
         }
 
         @Override
@@ -241,8 +247,8 @@ class SQSExecutorService extends AbstractExecutorService {
 
     @SuppressWarnings("unchecked")
     private <T> Callable<T> callableFromMessage(Message message) {
-        Object deserialized = serializer.unapply(message.getBody());
-        boolean isCallable = getBooleanMessageAttributeValue(message.getMessageAttributes(), SQSFutureTask.IS_CALLABLE_ATTRIBUTE_NAME);
+        Object deserialized = serializer.unapply(message.body());
+        boolean isCallable = getBooleanMessageAttributeValue(message.messageAttributes(), SQSFutureTask.IS_CALLABLE_ATTRIBUTE_NAME);
         if (isCallable) {
             return (Callable<T>)deserialized;
         } else {
@@ -286,7 +292,7 @@ class SQSExecutorService extends AbstractExecutorService {
         }
 
         private Optional<Metadata> getMetadataFromTags() {
-            Map<String, String> tags = sqs.listQueueTags(queueUrl).getTags();
+            Map<String, String> tags = sqs.listQueueTags(ListQueueTagsRequest.builder().queueUrl(queueUrl).build()).tags();
             return Optional.ofNullable(tags.get(metadata.deduplicationID.orElse(metadata.uuid)))
                     .map(Metadata::fromTag);
         }
@@ -311,7 +317,7 @@ class SQSExecutorService extends AbstractExecutorService {
                     if (exception != null) {
                         setException(exception);
                     } else {
-                        setFromResponse(result.getBody());
+                        setFromResponse(result.body());
                     }
                 });
                 this.resultFuture = Optional.of(responseFuture);
@@ -327,7 +333,7 @@ class SQSExecutorService extends AbstractExecutorService {
         }
 
         public SendMessageRequest toSendMessageRequest() {
-            return messageContent.toSendMessageRequest().withQueueUrl(queueUrl);
+            return messageContent.toSendMessageRequest().toBuilder().queueUrl(queueUrl).build();
         }
 
         private void pollForResultFromMetadata() {

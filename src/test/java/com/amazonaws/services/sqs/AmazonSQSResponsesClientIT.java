@@ -11,10 +11,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class AmazonSQSResponsesClientIT extends IntegrationTest {
     private static AmazonSQSRequester sqsRequester;
@@ -27,12 +29,14 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
         sqsResponder = new AmazonSQSResponderClient(sqs);
-        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName("RequestQueue-" + UUID.randomUUID().toString()).build();
+        requestQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
     }
 
     @After
     public void teardown() {
-        sqs.deleteQueue(requestQueueUrl);
+        sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(requestQueueUrl).build());
         sqsResponder.shutdown();
         sqsRequester.shutdown();
     }
@@ -49,12 +53,12 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
                 .build();
         consumer.start();
         try {
-            SendMessageRequest request = new SendMessageRequest()
-                    .withMessageBody("Hi there!")
-                    .withQueueUrl(requestQueueUrl);
+            SendMessageRequest request = SendMessageRequest.builder()
+                    .messageBody("Hi there!")
+                    .queueUrl(requestQueueUrl).build();
             Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
     
-            assertEquals("Right back atcha buddy!", replyMessage.getBody());
+            assertEquals("Right back atcha buddy!", replyMessage.body());
         } finally {
             consumer.terminate();
         }

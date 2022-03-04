@@ -1,13 +1,13 @@
 package com.amazonaws.services.sqs.util;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.util.function.Consumer;
 
 public class SQSMessageConsumerBuilder {
 
-    private AmazonSQS amazonSQS = null;
+    private SqsClient amazonSQS = null;
 
     private String queueUrl = null;
 
@@ -24,15 +24,15 @@ public class SQSMessageConsumerBuilder {
     private SQSMessageConsumerBuilder() {
     }
 
-    public AmazonSQS getAmazonSQS() {
+    public SqsClient getAmazonSQS() {
         return amazonSQS;
     }
 
-    public void setAmazonSQS(AmazonSQS amazonSQS) {
+    public void setAmazonSQS(SqsClient amazonSQS) {
         this.amazonSQS = amazonSQS;
     }
 
-    public SQSMessageConsumerBuilder withAmazonSQS(AmazonSQS amazonSQS) {
+    public SQSMessageConsumerBuilder withAmazonSQS(SqsClient amazonSQS) {
         setAmazonSQS(amazonSQS);
         return this;
     }

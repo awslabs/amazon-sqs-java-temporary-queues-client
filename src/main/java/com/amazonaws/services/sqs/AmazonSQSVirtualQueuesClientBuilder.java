@@ -1,14 +1,15 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.util.Constants;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
 public class AmazonSQSVirtualQueuesClientBuilder {
 
-    private AmazonSQS amazonSQS;
+    private SqsClient amazonSQS;
 
     private Optional<BiConsumer<String, Message>> messageHandler = Optional.empty();
 
@@ -23,15 +24,15 @@ public class AmazonSQSVirtualQueuesClientBuilder {
     private AmazonSQSVirtualQueuesClientBuilder() {
     }
 
-    public AmazonSQS getAmazonSQS() {
+    public SqsClient getAmazonSQS() {
         return amazonSQS;
     }
 
-    public void setAmazonSQS(AmazonSQS amazonSQS) {
+    public void setAmazonSQS(SqsClient amazonSQS) {
         this.amazonSQS = amazonSQS;
     }
 
-    public AmazonSQSVirtualQueuesClientBuilder withAmazonSQS(AmazonSQS amazonSQS) {
+    public AmazonSQSVirtualQueuesClientBuilder withAmazonSQS(SqsClient amazonSQS) {
         setAmazonSQS(amazonSQS);
         return this;
     }
@@ -144,7 +145,7 @@ public class AmazonSQSVirtualQueuesClientBuilder {
         return new AmazonSQSVirtualQueuesClientBuilder();
     }
 
-    public AmazonSQS build() {
+    public SqsClient build() {
         return new AmazonSQSVirtualQueuesClient(amazonSQS, messageHandler, orphanedMessageHandler,
                                                 hostQueuePollingThreads, maxWaitTimeSeconds, heartbeatIntervalSeconds);
     }

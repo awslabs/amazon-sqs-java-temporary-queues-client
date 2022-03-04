@@ -1,14 +1,16 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.util.Collections;
 import java.util.UUID;
@@ -33,15 +35,17 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
 
         String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
-                Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString),
+                Collections.singletonMap(QueueAttributeName.POLICY.toString(), policyString),
                 exceptionHandler);
 
-        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName("RequestQueue-" + UUID.randomUUID().toString()).build();
+        requestQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
     }
 
     @After
     public void teardown() {
-        sqs.deleteQueue(requestQueueUrl);
+        sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(requestQueueUrl).build());
         sqsResponder.shutdown();
         sqsRequester.shutdown();
     }
@@ -58,12 +62,12 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
                 .build();
         consumer.start();
         try {
-            SendMessageRequest request = new SendMessageRequest()
-                    .withMessageBody("Hi there!")
-                    .withQueueUrl(requestQueueUrl);
+            SendMessageRequest request = SendMessageRequest.builder()
+                    .messageBody("Hi there!")
+                    .queueUrl(requestQueueUrl).build();
             Message replyMessage = sqsRequester.sendMessageAndGetResponse(request, 5, TimeUnit.SECONDS);
-    
-            assertEquals("Right back atcha buddy!", replyMessage.getBody());
+
+            assertEquals("Right back atcha buddy!", replyMessage.body());
         } finally {
             consumer.terminate();
         }

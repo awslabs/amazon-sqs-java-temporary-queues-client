@@ -17,9 +17,12 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.sqs.executors.SerializableReference;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
 @SuppressWarnings("squid:S2055") // SonarLint exception for the custom serialization approach.
 class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializable {
@@ -51,7 +54,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
         LOG.info("Checking all queues begining with prefix " + prefix + " for idleness");
 
         try {
-            forEachQueue(this, serializable(p -> sqs.listQueues(p).getQueueUrls()), prefix,
+            forEachQueue(this, serializable(p -> sqs.listQueues(ListQueuesRequest.builder().queueNamePrefix(p).build()).queueUrls()), prefix,
                     SQS_LIST_QUEUES_LIMIT, (Serializable & Consumer<String>) this::checkQueueForIdleness);
         } catch (RejectedExecutionException e) {
             // Already shutting down, ignore
@@ -66,7 +69,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
         try {
             if (isQueueIdle(queueUrl) && SQSQueueUtils.isQueueEmpty(sqs, queueUrl)) {
                 LOG.info("Deleting idle queue: " + queueUrl);
-                sqs.deleteQueue(queueUrl);
+                sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
             }
         } catch (QueueDoesNotExistException e) {
             // Queue already deleted so nothing to do.
@@ -74,7 +77,7 @@ class IdleQueueSweeper extends SQSScheduledExecutorService implements Serializab
     }
 
     private boolean isQueueIdle(String queueUrl) {
-        Map<String, String> queueTags = sqs.listQueueTags(queueUrl).getTags();
+        Map<String, String> queueTags = sqs.listQueueTags(ListQueueTagsRequest.builder().queueUrl(queueUrl).build()).tags();
         Long lastHeartbeat = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG);
         Long idleQueueRetentionPeriod = AmazonSQSIdleQueueDeletingClient.getLongTag(queueTags, AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG);
         long currentTimestamp = System.currentTimeMillis();

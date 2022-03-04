@@ -38,10 +38,14 @@ import org.junit.Test;
 import com.amazonaws.services.sqs.executors.SerializableCallable;
 import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
 public class SQSExecutorServiceIT extends IntegrationTest {
 
@@ -76,7 +80,8 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
-        queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueNamePrefix + "-RequestQueue").build();
+        queueUrl = sqs.createQueue(createQueueRequest).queueUrl();
         tasksCompletedLatch = new CountDownLatch(1);
         executors.clear();
     }
@@ -88,7 +93,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         } finally {
             requester.shutdown();
             responder.shutdown();
-            sqs.deleteQueue(queueUrl);
+            sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }
     }
 
@@ -228,8 +233,8 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         assertEquals(expected, actual);
     }
 
-    private static Function<String, List<String>> listQueuesFunction(SerializableReference<AmazonSQS> sqsRef) {
-        return (Function<String, List<String>> & Serializable)p -> sqsRef.get().listQueues(p).getQueueUrls();
+    private static Function<String, List<String>> listQueuesFunction(SerializableReference<SqsClient> sqsRef) {
+        return (Function<String, List<String>> & Serializable)p -> sqsRef.get().listQueues(ListQueuesRequest.builder().queueNamePrefix(p).build()).queueUrls();
     }
     
     @Test
@@ -239,15 +244,15 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         Set<String> expected = new HashSet<>();
         for (int i = 0; i < numQueues; i++) {
             String queueName = prefix + i;
-            expected.add(sqs.createQueue(queueName).getQueueUrl());
+            expected.add(sqs.createQueue(CreateQueueRequest.builder().queueName(queueName).build()).queueUrl());
         }
         try {
-            SQSQueueUtils.awaitWithPolling(5, 70, TimeUnit.SECONDS, () -> sqs.listQueues(prefix).getQueueUrls().size() == numQueues);
+            SQSQueueUtils.awaitWithPolling(5, 70, TimeUnit.SECONDS, () -> sqs.listQueues(ListQueuesRequest.builder().queueNamePrefix(prefix).build()).queueUrls().size() == numQueues);
             List<SQSExecutorService> executors = 
                     IntStream.range(0, 5)
                              .mapToObj(x -> createExecutor(queueUrl))
                              .collect(Collectors.toList());
-            try (SerializableReference<AmazonSQS> sqsRef = new SerializableReference<>("SQS", sqs, true)) {
+            try (SerializableReference<SqsClient> sqsRef = new SerializableReference<>("SQS", sqs, true)) {
                 Function<String, List<String>> lister = SQSExecutorServiceIT.listQueuesFunction(sqsRef);
                 Set<String> allQueueUrls = new HashSet<>(SQSQueueUtils.listQueues(executors.get(0), lister, prefix, 50));
                 assertEquals(expected.size(), allQueueUrls.size());
@@ -256,7 +261,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         } finally {
             expected.parallelStream().forEach(queueUrl -> {
                 try {
-                    sqs.deleteQueue(queueUrl);
+                    sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
                 } catch (QueueDoesNotExistException e) {
                     // Ignore
                 }

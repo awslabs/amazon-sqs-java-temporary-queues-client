@@ -11,20 +11,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 /**
  * Implementation of the request/response interfaces that creates a single
  * temporary queue for each response message.
  */
 class AmazonSQSRequesterClient implements AmazonSQSRequester {
-    private final AmazonSQS sqs;
+    private final SqsClient sqs;
     private final String queuePrefix;
     private final Map<String, String> queueAttributes;
     private final Consumer<Exception> exceptionHandler;
@@ -33,11 +35,11 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
 
     private Runnable shutdownHook;
     
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes) {
+    AmazonSQSRequesterClient(SqsClient sqs, String queuePrefix, Map<String, String> queueAttributes) {
         this(sqs, queuePrefix, queueAttributes, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
-    AmazonSQSRequesterClient(AmazonSQS sqs, String queuePrefix, Map<String, String> queueAttributes,
+    AmazonSQSRequesterClient(SqsClient sqs, String queuePrefix, Map<String, String> queueAttributes,
                 Consumer<Exception> exceptionHandler) {
         this.sqs = sqs;
         this.queuePrefix = queuePrefix;
@@ -50,7 +52,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     }
 
     @Override
-    public AmazonSQS getAmazonSQS() {
+    public SqsClient getAmazonSQS() {
         return sqs;
     }
 
@@ -62,14 +64,14 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
     @Override
     public CompletableFuture<Message> sendMessageAndGetResponseAsync(SendMessageRequest request, int timeout, TimeUnit unit) {
         String queueName = queuePrefix + UUID.randomUUID().toString();
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueName)
-                .withAttributes(queueAttributes);
-        String responseQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueName)
+                .attributesWithStrings(queueAttributes).build();
+        String responseQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
 
         SendMessageRequest requestWithResponseUrl = SQSQueueUtils.copyWithExtraAttributes(request,
                 Collections.singletonMap(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME,
-                        new MessageAttributeValue().withDataType("String").withStringValue(responseQueueUrl)));
+                        MessageAttributeValue.builder().dataType("String").stringValue(responseQueueUrl).build()));
         // TODO-RS: Should be using sendMessageAsync
         sqs.sendMessage(requestWithResponseUrl);
 
@@ -102,7 +104,7 @@ class AmazonSQSRequesterClient implements AmazonSQSRequester {
         @Override
         protected void runShutdownHook() {
             future.completeExceptionally(new TimeoutException());
-            sqs.deleteQueue(queueUrl);
+            sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
             responseConsumers.remove(this);
         }
     }

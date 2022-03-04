@@ -28,7 +28,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
@@ -37,16 +36,15 @@ import java.util.function.Predicate;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 /**
  * The ReceiveQueueBuffer class is responsible for dequeueing of messages from a single SQS queue.
@@ -64,7 +62,7 @@ public class ReceiveQueueBuffer {
 
     private final ScheduledExecutorService waitTimer;
 
-    private final AmazonSQS sqsClient;
+    private final SqsClient sqsClient;
 
     /**
      * This buffer's queue visibility timeout. Used to detect expired message that should not be
@@ -92,19 +90,17 @@ public class ReceiveQueueBuffer {
     /** finished batches are stored in this list. */
     protected LinkedList<ReceiveMessageBatchTask> finishedTasks = new LinkedList<>();
 
-    public ReceiveQueueBuffer(AmazonSQS sqsClient, ScheduledExecutorService waitTimer, String queueUrl) {
+    public ReceiveQueueBuffer(SqsClient sqsClient, ScheduledExecutorService waitTimer, String queueUrl) {
         this.sqsClient = sqsClient;
         this.waitTimer = waitTimer;
 
         if (queueUrl.endsWith(".fifo")) {
             throw new IllegalArgumentException("FIFO queues are not yet supported: " + queueUrl);
         }
-
-        GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest().withQueueUrl(queueUrl)
-                .withAttributeNames(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
-                        QueueAttributeName.VisibilityTimeout.toString());
-        // TODO-RS: UserAgent?
-        Map<String, String> attributes = sqsClient.getQueueAttributes(getQueueAttributesRequest).getAttributes();
+        GetQueueAttributesRequest getQueueAttributesRequest = GetQueueAttributesRequest.builder().queueUrl(queueUrl)
+                .attributeNames(QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS,
+                        QueueAttributeName.VISIBILITY_TIMEOUT).build();
+        Map<String, String> attributes = sqsClient.getQueueAttributes(getQueueAttributesRequest).attributesAsStrings();
         long visibilityTimeoutSeconds = Long.parseLong(attributes.get("VisibilityTimeout"));
         defaultVisibilityTimeoutNanos = TimeUnit.SECONDS.toNanos(visibilityTimeoutSeconds);
         long waitTimeSeconds = Long.parseLong(attributes.get("ReceiveMessageWaitTimeSeconds"));
@@ -133,19 +129,19 @@ public class ReceiveQueueBuffer {
      * 
      * @return never null
      */
-    public Future<ReceiveMessageResult> receiveMessageAsync(ReceiveMessageRequest rq) {
+    public Future<ReceiveMessageResponse> receiveMessageAsync(ReceiveMessageRequest rq) {
         if (shutDown) {
-            throw new AmazonClientException("The buffer has been shut down.");
+            throw SdkClientException.create("The buffer has been shut down.");
         }
 
         // issue the future...
         int numMessages = 10;
-        if (rq.getMaxNumberOfMessages() != null) {
-            numMessages = rq.getMaxNumberOfMessages();
+        if (rq.maxNumberOfMessages() != null) {
+            numMessages = rq.maxNumberOfMessages();
         }
         long waitTimeNanos;
-        if (rq.getWaitTimeSeconds() != null) {
-            waitTimeNanos = TimeUnit.SECONDS.toNanos(rq.getWaitTimeSeconds());
+        if (rq.waitTimeSeconds() != null) {
+            waitTimeNanos = TimeUnit.SECONDS.toNanos(rq.waitTimeSeconds());
         } else {
             waitTimeNanos = defaultWaitTimeNanos;
         }
@@ -346,7 +342,7 @@ public class ReceiveQueueBuffer {
         }
     }
 
-    protected class ReceiveMessageFuture extends CompletableFuture<ReceiveMessageResult> {
+    protected class ReceiveMessageFuture extends CompletableFuture<ReceiveMessageResponse> {
         /* how many messages did the request ask for */
         private final int requestedSize;
 
@@ -410,8 +406,7 @@ public class ReceiveQueueBuffer {
 
         public synchronized void complete() {
             if (!isDone()) {
-                ReceiveMessageResult result = new ReceiveMessageResult();
-                result.setMessages(messages);
+                ReceiveMessageResponse result = ReceiveMessageResponse.builder().messages(messages).build();
                 complete(result);
             }
         }
@@ -530,7 +525,7 @@ public class ReceiveQueueBuffer {
                 return;
             }
 
-            ChangeMessageVisibilityBatchRequest batchRequest = new ChangeMessageVisibilityBatchRequest().withQueueUrl(sourceQueueUrl);
+            ChangeMessageVisibilityBatchRequest.Builder batchRequestBuilder = ChangeMessageVisibilityBatchRequest.builder().queueUrl(sourceQueueUrl);
             // TODO-RS: UserAgent?
 
             List<ChangeMessageVisibilityBatchRequestEntry> entries = 
@@ -539,15 +534,15 @@ public class ReceiveQueueBuffer {
             int i = 0;
             for (Message m : messages) {
 
-                entries.add(new ChangeMessageVisibilityBatchRequestEntry().withId(Integer.toString(i))
-                        .withReceiptHandle(m.getReceiptHandle()).withVisibilityTimeout(0));
+                entries.add(ChangeMessageVisibilityBatchRequestEntry.builder().id(Integer.toString(i))
+                        .receiptHandle(m.receiptHandle()).visibilityTimeout(0).build());
                 ++i;
             }
 
             try {
-                batchRequest.setEntries(entries);
-                sqsClient.changeMessageVisibilityBatch(batchRequest);
-            } catch (AmazonClientException e) {
+                batchRequestBuilder.entries(entries);
+                sqsClient.changeMessageVisibilityBatch(batchRequestBuilder.build());
+            } catch (SdkClientException e) {
                 // Log and ignore.
                 LOG.warn("ReceiveMessageBatchTask: changeMessageVisibility failed " + e);
             }

@@ -17,58 +17,57 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.Test;
-
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 public class ReceiveQueueBufferTest {
 
-    private final AmazonSQS sqs;
+    private final SqsClient sqs;
     private final ScheduledExecutorService executor;
     private final String queueUrl;
     
     public ReceiveQueueBufferTest() {
-        this.sqs = mock(AmazonSQS.class);
+        this.sqs = mock(SqsClient.class);
         this.executor = mock(ScheduledExecutorService.class);
         this.queueUrl = "http://queue.amazon.com/123456789012/MyQueue";
         
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(), "20");
-        attributes.put(QueueAttributeName.VisibilityTimeout.toString(), "30");
+        attributes.put(QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS.toString(), "20");
+        attributes.put(QueueAttributeName.VISIBILITY_TIMEOUT.toString(), "30");
         List<String> attributeNames = Arrays.asList(
-                QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
-                QueueAttributeName.VisibilityTimeout.toString());
-        GetQueueAttributesResult getQueueAttributesResult = new GetQueueAttributesResult()
-                .withAttributes(attributes);
+                QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS.toString(),
+                QueueAttributeName.VISIBILITY_TIMEOUT.toString());
+        GetQueueAttributesResponse getQueueAttributesResult = GetQueueAttributesResponse.builder()
+                .attributesWithStrings(attributes).build();
         when(sqs.getQueueAttributes(
-                eq(new GetQueueAttributesRequest()
-                        .withQueueUrl(queueUrl)
-                        .withAttributeNames(attributeNames))))
+                eq(GetQueueAttributesRequest.builder()
+                        .queueUrl(queueUrl)
+                        .attributeNamesWithStrings(attributeNames).build())))
                 .thenReturn(getQueueAttributesResult);
     }
     
     @Test
     public void deliverBeforeReceive() throws InterruptedException, ExecutionException, TimeoutException {
         ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, executor, queueUrl);
-        Message message = new Message().withBody("Hi there!");
+        Message message = Message.builder().body("Hi there!").build();
         buffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
-        Future<ReceiveMessageResult> future = buffer.receiveMessageAsync(new ReceiveMessageRequest());
-        ReceiveMessageResult result = future.get(2, TimeUnit.SECONDS);
-        assertEquals(1, result.getMessages().size());
+        Future<ReceiveMessageResponse> future = buffer.receiveMessageAsync(ReceiveMessageRequest.builder().build());
+        ReceiveMessageResponse result = future.get(2, TimeUnit.SECONDS);
+        assertEquals(1, result.messages().size());
     }
     
     @Test
     public void deliverAfterReceive() throws InterruptedException, ExecutionException, TimeoutException {
         ReceiveQueueBuffer buffer = new ReceiveQueueBuffer(sqs, executor, queueUrl);
-        Message message = new Message().withBody("Hi there!");
-        Future<ReceiveMessageResult> future = buffer.receiveMessageAsync(new ReceiveMessageRequest());
+        Message message = Message.builder().body("Hi there!").build();
+        Future<ReceiveMessageResponse> future = buffer.receiveMessageAsync(ReceiveMessageRequest.builder().build());
         buffer.deliverMessages(Collections.singletonList(message), queueUrl, null);
-        ReceiveMessageResult result = future.get(2, TimeUnit.SECONDS);
-        assertEquals(1, result.getMessages().size());
+        ReceiveMessageResponse result = future.get(2, TimeUnit.SECONDS);
+        assertEquals(1, result.messages().size());
     }
 }

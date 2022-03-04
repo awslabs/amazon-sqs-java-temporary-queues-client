@@ -1,5 +1,7 @@
 package com.amazonaws.services.sqs;
 
+import software.amazon.awssdk.services.sqs.SqsClient;
+
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -12,15 +14,15 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
     private AmazonSQSTemporaryQueuesClientBuilder() {
     }
     
-    public Optional<AmazonSQS> getAmazonSQS() {
+    public Optional<SqsClient> getAmazonSQS() {
         return requesterBuilder.getAmazonSQS();
     }
     
-    public void setAmazonSQS(AmazonSQS sqs) {
+    public void setAmazonSQS(SqsClient sqs) {
         requesterBuilder.setAmazonSQS(sqs);
     }
     
-    public AmazonSQSTemporaryQueuesClientBuilder withAmazonSQS(AmazonSQS sqs) {
+    public AmazonSQSTemporaryQueuesClientBuilder withAmazonSQS(SqsClient sqs) {
         setAmazonSQS(sqs);
         return this;
     }
@@ -75,11 +77,11 @@ public class AmazonSQSTemporaryQueuesClientBuilder {
         return new AmazonSQSTemporaryQueuesClientBuilder();
     }
     
-    public static AmazonSQS defaultClient() {
+    public static SqsClient defaultClient() {
         return standard().build();
     }
     
-    public AmazonSQS build() {
+    public SqsClient build() {
         return AmazonSQSTemporaryQueuesClient.make(requesterBuilder).getWrappedClient();
     }
 }

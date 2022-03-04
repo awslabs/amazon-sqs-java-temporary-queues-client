@@ -16,17 +16,20 @@ import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Test;
 
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.ExceptionAsserter;
 import com.amazonaws.services.sqs.util.MockSQS;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class AmazonSQSRequesterClientTest {
     
     private final ExceptionAsserter exceptionHandler = new ExceptionAsserter();
     
-    private final AmazonSQS sqs;
+    private final SqsClient sqs;
     private final String accountPrefix;
     private final AmazonSQSRequesterClient requesterClient;
     private final AmazonSQSResponderClient responderClient;
@@ -50,22 +53,22 @@ public class AmazonSQSRequesterClientTest {
         String requestMessageBody = "Ping";
         String responseMessageBody = "Pong";
         
-        String queueUrl = sqs.createQueue("MyQueue").getQueueUrl();
+        String queueUrl = sqs.createQueue(CreateQueueRequest.builder().queueName("MyQueue").build()).queueUrl();
         
-        SendMessageRequest request = new SendMessageRequest()
-                .withQueueUrl(queueUrl)
-                .withMessageBody(requestMessageBody);
-        Future<Message> future = requesterClient.sendMessageAndGetResponseAsync(request, 5, TimeUnit.SECONDS);     
+        SendMessageRequest request = SendMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .messageBody(requestMessageBody).build();
+        Future<Message> future = requesterClient.sendMessageAndGetResponseAsync(request, 5, TimeUnit.SECONDS);
         
-        Message requestMessage = sqs.receiveMessage(queueUrl).getMessages().get(0);
-        assertEquals(requestMessageBody, requestMessage.getBody());
-        String responseQueueUrl = requestMessage.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
+        Message requestMessage = sqs.receiveMessage(ReceiveMessageRequest.builder().queueUrl(queueUrl).build()).messages().get(0);
+        assertEquals(requestMessageBody, requestMessage.body());
+        String responseQueueUrl = requestMessage.messageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).stringValue();
         assertNotNull(responseQueueUrl);
         
         responderClient.sendResponseMessage(MessageContent.fromMessage(requestMessage), new MessageContent(responseMessageBody));
         
         Message response = future.get(5, TimeUnit.SECONDS);
-        assertEquals(responseMessageBody, response.getBody());
+        assertEquals(responseMessageBody, response.body());
         
         // Make sure the response queue gets deleted
         SQSQueueUtils.awaitQueueDeleted(sqs, responseQueueUrl, 70, TimeUnit.SECONDS);
@@ -75,16 +78,16 @@ public class AmazonSQSRequesterClientTest {
     public void timeout() throws TimeoutException, InterruptedException, ExecutionException {
         String requestMessageBody = "Ping";
         
-        String queueUrl = sqs.createQueue("MyQueue").getQueueUrl();
+        String queueUrl = sqs.createQueue(CreateQueueRequest.builder().queueName("MyQueue").build()).queueUrl();
         
-        SendMessageRequest request = new SendMessageRequest()
-                .withQueueUrl(queueUrl)
-                .withMessageBody(requestMessageBody);
+        SendMessageRequest request = SendMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .messageBody(requestMessageBody).build();
         Future<Message> future = requesterClient.sendMessageAndGetResponseAsync(request, 1, TimeUnit.SECONDS);     
         
-        Message requestMessage = sqs.receiveMessage(queueUrl).getMessages().get(0);
-        assertEquals(requestMessageBody, requestMessage.getBody());
-        String responseQueueUrl = requestMessage.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
+        Message requestMessage = sqs.receiveMessage(ReceiveMessageRequest.builder().queueUrl(queueUrl).build()).messages().get(0);
+        assertEquals(requestMessageBody, requestMessage.body());
+        String responseQueueUrl = requestMessage.messageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).stringValue();
         assertNotNull(responseQueueUrl);
         
         // TODO-RS: Junit 5

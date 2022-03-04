@@ -1,12 +1,13 @@
 package com.amazonaws.services.sqs;
 
 import com.amazonaws.services.sqs.util.Constants;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.util.Optional;
 
 public class AmazonSQSResponderClientBuilder {
 
-    private Optional<AmazonSQS> customSQS = Optional.empty();
+    private Optional<SqsClient> customSQS = Optional.empty();
     
     private String internalQueuePrefix = "__RequesterClientQueues__";
     private long queueHeartbeatInterval = Constants.HEARTBEAT_INTERVAL_SECONDS_DEFAULT;
@@ -18,15 +19,15 @@ public class AmazonSQSResponderClientBuilder {
         return standard().build();
     }
     
-    public Optional<AmazonSQS> getAmazonSQS() {
+    public Optional<SqsClient> getAmazonSQS() {
         return customSQS;
     }
     
-    public void setAmazonSQS(AmazonSQS sqs) {
+    public void setAmazonSQS(SqsClient sqs) {
         this.customSQS = Optional.of(sqs);
     }
     
-    public AmazonSQSResponderClientBuilder withAmazonSQS(AmazonSQS sqs) {
+    public AmazonSQSResponderClientBuilder withAmazonSQS(SqsClient sqs) {
         setAmazonSQS(sqs);
         return this;
     }
@@ -65,9 +66,9 @@ public class AmazonSQSResponderClientBuilder {
     }
     
     public AmazonSQSResponder build() {
-        AmazonSQS sqs = customSQS.orElseGet(AmazonSQSClientBuilder::defaultClient);
-        AmazonSQS deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix, queueHeartbeatInterval);
-        AmazonSQS virtualQueuesClient = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter)
+        SqsClient sqs = customSQS.orElseGet(SqsClient::create);
+        SqsClient deleter = new AmazonSQSIdleQueueDeletingClient(sqs, internalQueuePrefix, queueHeartbeatInterval);
+        SqsClient virtualQueuesClient = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(deleter)
                 .withHeartbeatIntervalSeconds(queueHeartbeatInterval).build();
         return new AmazonSQSResponderClient(virtualQueuesClient);
     }

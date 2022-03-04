@@ -1,11 +1,11 @@
 package com.amazonaws.services.sqs;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.Constants;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import org.junit.After;
@@ -13,12 +13,16 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
@@ -40,7 +44,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     public void teardown() {
         if (client != null && queueUrl != null) {
             try {
-                client.deleteQueue(queueUrl);
+                client.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
             } catch (QueueDoesNotExistException e) {
                 // Ignore
             }
@@ -58,11 +62,13 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     @Test
     public void idleQueueIsDeleted() throws InterruptedException {
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "1");
         client.startSweeper(requester, responder, 5, TimeUnit.SECONDS, exceptionHandler);
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix + "-IdleQueue")
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "1");
-        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "-IdleQueue")
+                .attributesWithStrings(attributes).build();
+        queueUrl = client.createQueue(createQueueRequest).queueUrl();
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         Assert.assertTrue("Expected queue to be deleted: " + queueUrl,
@@ -71,14 +77,16 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     @Test
     public void updatedHeartBeatTag() throws InterruptedException {
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix + "-HeartbeatTag")
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
-        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "-HeartbeatTag")
+                .attributesWithStrings(attributes).build();
+        queueUrl = client.createQueue(createQueueRequest).queueUrl();
 
-        SendMessageRequest sendMsgRequest = new SendMessageRequest()
-                .withQueueUrl(queueUrl)
-                .withMessageBody("hello world");
+        SendMessageRequest sendMsgRequest = SendMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .messageBody("hello world").build();
         client.sendMessage(sendMsgRequest);
 
         String initialHeartBeat = getLastHeartbeatTimestamp();
@@ -96,21 +104,23 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
     private String getLastHeartbeatTimestamp() {
         return client
-                .listQueueTags(queueUrl)
-                .getTags()
+                .listQueueTags(ListQueueTagsRequest.builder().queueUrl(queueUrl).build())
+                .tags()
                 .get(AmazonSQSIdleQueueDeletingClient.LAST_HEARTBEAT_TIMESTAMP_TAG);
     }
 
     @Test
     public void notUpdatedHeartBeatTag() throws InterruptedException {
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix + "-HeartbeatTag")
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
-        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "-HeartbeatTag")
+                .attributesWithStrings(attributes).build();
+        queueUrl = client.createQueue(createQueueRequest).queueUrl();
 
-        SendMessageRequest sendMsgRequest = new SendMessageRequest()
-                .withQueueUrl(queueUrl)
-                .withMessageBody("hello world");
+        SendMessageRequest sendMsgRequest = SendMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .messageBody("hello world").build();
         client.sendMessage(sendMsgRequest);
 
 
@@ -126,11 +136,13 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     
     @Test
     public void recreatingQueues() throws InterruptedException {
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
         String queueName = queueNamePrefix + "-DeletedTooSoon";
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueName)
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "60");
-        queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueName)
+                .attributesWithStrings(attributes).build();
+        queueUrl = client.createQueue(createQueueRequest).queueUrl();
 
         QueueUser user = new QueueUser();
         user.start();
@@ -138,7 +150,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         TimeUnit.SECONDS.sleep(5);
         
         // Use the underlying client so the wrapper has no chance to do anything first
-        sqs.deleteQueue(queueUrl);
+        sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         
         // Sleeping is unfortunate here, but it's necessary to ensure the eventual consistency
         // of the delete is resolved first. Otherwise it's easy to get a false positive below.
@@ -154,14 +166,14 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         user.finish();
         
         String failoverQueueName = AmazonSQSIdleQueueDeletingClient.alternateQueueName(queueName);
-        String failoverQueueUrl = sqs.getQueueUrl(failoverQueueName).getQueueUrl();
+        String failoverQueueUrl = sqs.getQueueUrl(GetQueueUrlRequest.builder().queueName(failoverQueueName).build()).queueUrl();
         
         // Delete the queue through the client and ensure the failover queue is also deleted.
         // Eventual consistency is a problem here as well - the DeleteQueue may fail if
         // done too soon after recreating a queue.
         SQSQueueUtils.awaitWithPolling(2, 70, TimeUnit.SECONDS, () -> {
             try {
-                client.deleteQueue(queueUrl);
+                client.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
                 return true;
             } catch (QueueDoesNotExistException e) {
                 return false;
@@ -192,7 +204,8 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         
         private void sendMessage() {
             try {
-                client.sendMessage(queueUrl, "Message");
+                SendMessageRequest sendMessageRequest = SendMessageRequest.builder().queueUrl(queueUrl).messageBody("Message").build();
+                client.sendMessage(sendMessageRequest);
             } catch (RuntimeException e) {
                 exceptionHandler.accept(e);
             }

@@ -1,8 +1,8 @@
 package com.amazonaws.services.sqs.util;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import org.junit.Test;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
@@ -22,14 +22,14 @@ public class SQSQueueUtilsTest {
     @Test
     public void sendMessageRequestCopyWithExtraAttributes() throws IllegalAccessException {
 
-        SendMessageRequest sendMessageRequest = new SendMessageRequest()
-                .withQueueUrl("queueUrl")
-                .withMessageBody("messageBody")
-                .withDelaySeconds(5)
-                .withMessageAttributes(Collections.emptyMap())
-                .withMessageDeduplicationId("dedup")
-                .withMessageGroupId("groupId")
-                .withMessageSystemAttributes(Collections.emptyMap());
+        SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
+                .queueUrl("queueUrl")
+                .messageBody("messageBody")
+                .delaySeconds(5)
+                .messageAttributes(Collections.emptyMap())
+                .messageDeduplicationId("dedup")
+                .messageGroupId("groupId")
+                .messageSystemAttributes(Collections.emptyMap()).build();
 
         SendMessageRequest sendMessageRequestCopy =
                 SQSQueueUtils.copyWithExtraAttributes(sendMessageRequest, Collections.emptyMap());
@@ -47,10 +47,10 @@ public class SQSQueueUtilsTest {
     @Test
     public void createQueueRequestCopyWithExtraAttributes() throws IllegalAccessException {
 
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName("queueName")
-                .withAttributes(Collections.emptyMap())
-                .withTags(Collections.emptyMap());
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName("queueName")
+                .attributesWithStrings(Collections.emptyMap())
+                .tags(Collections.emptyMap()).build();
 
         CreateQueueRequest createQueueRequestCopy =
                 SQSQueueUtils.copyWithExtraAttributes(createQueueRequest, Collections.emptyMap());

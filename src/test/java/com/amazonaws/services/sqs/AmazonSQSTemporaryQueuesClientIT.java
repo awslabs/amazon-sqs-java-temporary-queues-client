@@ -7,8 +7,6 @@ import static org.junit.Assert.assertNotNull;
 import java.util.Collections;
 import java.util.Map;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Assert;
@@ -16,6 +14,10 @@ import org.junit.Test;
 
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import org.junit.jupiter.api.Assertions;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
@@ -25,10 +27,10 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     @After
     public void teardown() {
         if (queueUrl != null) {
-            client.deleteQueue(queueUrl);
+            client.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }
         if (client != null) {
-            client.shutdown();
+            client.close();
         }
     }
     
@@ -41,9 +43,9 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     public void createQueueWithUnsupportedAttributes() {
         Assertions.assertThrows(IllegalArgumentException.class, () -> {
             setupClient(null);
-            client.createQueue(new CreateQueueRequest()
-                    .withQueueName(queueNamePrefix + "InvalidQueue")
-                    .withAttributes(Collections.singletonMap(QueueAttributeName.FifoQueue.name(), "true")));
+            client.createQueue(CreateQueueRequest.builder()
+                    .queueName(queueNamePrefix + "InvalidQueue")
+                    .attributesWithStrings(Collections.singletonMap(QueueAttributeName.FIFO_QUEUE.name(), "true")).build());
         });
     }
 
@@ -76,13 +78,19 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
     private void createQueueShouldSetRetentionPeriod(Long idleQueueRetentionPeriod) {
         setupClient(idleQueueRetentionPeriod);
         idleQueueRetentionPeriod = (idleQueueRetentionPeriod != null) ? idleQueueRetentionPeriod : 300L;
-        queueUrl = client.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
-        Map<String, String> attributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "TestQueue").build();
+        queueUrl = client.createQueue(createQueueRequest).queueUrl();
+        GetQueueAttributesRequest getQueueAttributesRequest = GetQueueAttributesRequest.builder()
+                .queueUrl(queueUrl).attributeNamesWithStrings(Collections.singletonList("All")).build();
+        Map<String, String> attributes = client.getQueueAttributes(getQueueAttributesRequest).attributesAsStrings();
         String hostQueueUrl = attributes.get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
         assertNotNull(hostQueueUrl);
         Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), attributes.get(IDLE_QUEUE_RETENTION_PERIOD));
 
-        Map<String, String> hostQueueAttributes = client.getQueueAttributes(queueUrl, Collections.singletonList("All")).getAttributes();
+        GetQueueAttributesRequest hostGetQueueAttributes = GetQueueAttributesRequest.builder()
+                .queueUrl(queueUrl).attributeNamesWithStrings(Collections.singletonList("All")).build();
+        Map<String, String> hostQueueAttributes = client.getQueueAttributes(hostGetQueueAttributes).attributesAsStrings();
         Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(Constants.IDLE_QUEUE_RETENTION_PERIOD));
     }
 }

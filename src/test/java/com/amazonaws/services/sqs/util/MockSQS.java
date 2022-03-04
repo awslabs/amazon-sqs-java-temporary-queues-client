@@ -1,34 +1,34 @@
 package com.amazonaws.services.sqs.util;
 
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityResponse;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.CreateQueueResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueResponse;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsResponse;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesResponse;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
+import software.amazon.awssdk.services.sqs.model.TagQueueResponse;
+import software.amazon.awssdk.services.sqs.model.UntagQueueRequest;
+import software.amazon.awssdk.services.sqs.model.UntagQueueResponse;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.amazonaws.services.sqs.AbstractAmazonSQS;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.CreateQueueResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageResult;
-import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.DeleteQueueResult;
-import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
-import com.amazonaws.services.sqs.model.ListQueueTagsResult;
-import com.amazonaws.services.sqs.model.ListQueuesRequest;
-import com.amazonaws.services.sqs.model.ListQueuesResult;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.TagQueueRequest;
-import com.amazonaws.services.sqs.model.TagQueueResult;
-import com.amazonaws.services.sqs.model.UntagQueueRequest;
-import com.amazonaws.services.sqs.model.UntagQueueResult;
-
-public class MockSQS extends AbstractAmazonSQS {
+public class MockSQS implements SqsClient {
     private final String accountPrefix;
     private final Map<String, MockSQSQueue> queues = new HashMap<>();
     
@@ -50,69 +50,79 @@ public class MockSQS extends AbstractAmazonSQS {
             String queueName = queueUrl.substring(accountPrefix.length());
             MockSQSQueue queue = queues.get(queueName);
             if (queue == null) {
-                throw new QueueDoesNotExistException("The queue does not exist");
+                throw QueueDoesNotExistException.builder().message("The queue does not exist").build();
             }
             return queue;
         }
     }
     
     @Override
-    public CreateQueueResult createQueue(CreateQueueRequest request) {
-        String queueName = request.getQueueName();
+    public CreateQueueResponse createQueue(CreateQueueRequest request) {
+        String queueName = request.queueName();
         String queueUrl = accountPrefix + queueName;
         queues.put(queueName, new MockSQSQueue(queueName));
-        return new CreateQueueResult().withQueueUrl(queueUrl);
+        return CreateQueueResponse.builder().queueUrl(queueUrl).build();
     }
 
     @Override
-    public ListQueuesResult listQueues(ListQueuesRequest request) {
-        String prefix = request.getQueueNamePrefix();
+    public ListQueuesResponse listQueues(ListQueuesRequest request) {
+        String prefix = request.queueNamePrefix();
         String searchPrefix = prefix == null ? "" : prefix;
         List<String> queueUrls = queues.keySet().stream()
                 .filter(name -> name.startsWith(searchPrefix))
                 .map(name -> accountPrefix + name)
                 .collect(Collectors.toList());
-        return new ListQueuesResult().withQueueUrls(queueUrls);
+        return ListQueuesResponse.builder().queueUrls(queueUrls).build();
     }
     
     @Override
-    public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-        queues.remove(getQueue(request.getQueueUrl()).getQueueName());
-        return new DeleteQueueResult();
+    public DeleteQueueResponse deleteQueue(DeleteQueueRequest request) {
+        queues.remove(getQueue(request.queueUrl()).getQueueName());
+        return DeleteQueueResponse.builder().build();
     }
     
     @Override
-    public SendMessageResult sendMessage(SendMessageRequest request) {
-        return getQueue(request.getQueueUrl()).sendMessage(request);
+    public SendMessageResponse sendMessage(SendMessageRequest request) {
+        return getQueue(request.queueUrl()).sendMessage(request);
     }
     
     @Override
-    public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
-        return getQueue(request.getQueueUrl()).receiveMessage(request);
+    public ReceiveMessageResponse receiveMessage(ReceiveMessageRequest request) {
+        return getQueue(request.queueUrl()).receiveMessage(request);
     }
     
     @Override
-    public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest request) {
-        return getQueue(request.getQueueUrl()).changeMessageVisibility(request);
+    public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest request) {
+        return getQueue(request.queueUrl()).changeMessageVisibility(request);
     }
     
     @Override
-    public DeleteMessageResult deleteMessage(DeleteMessageRequest request) {
-        return getQueue(request.getQueueUrl()).deleteMessage(request);
+    public DeleteMessageResponse deleteMessage(DeleteMessageRequest request) {
+        return getQueue(request.queueUrl()).deleteMessage(request);
     }
     
     @Override
-    public TagQueueResult tagQueue(TagQueueRequest request) {
-        return getQueue(request.getQueueUrl()).tagQueue(request);
+    public TagQueueResponse tagQueue(TagQueueRequest request) {
+        return getQueue(request.queueUrl()).tagQueue(request);
     }
     
     @Override
-    public UntagQueueResult untagQueue(UntagQueueRequest request) {
-        return getQueue(request.getQueueUrl()).untagQueue(request);
+    public UntagQueueResponse untagQueue(UntagQueueRequest request) {
+        return getQueue(request.queueUrl()).untagQueue(request);
     }
     
     @Override
-    public ListQueueTagsResult listQueueTags(ListQueueTagsRequest request) {
-        return getQueue(request.getQueueUrl()).listQueueTags();
+    public ListQueueTagsResponse listQueueTags(ListQueueTagsRequest request) {
+        return getQueue(request.queueUrl()).listQueueTags();
+    }
+
+    @Override
+    public String serviceName() {
+        return null;
+    }
+
+    @Override
+    public void close() {
+
     }
 }
