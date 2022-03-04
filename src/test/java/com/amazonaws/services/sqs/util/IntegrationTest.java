@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SqsException;
+import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
@@ -76,8 +77,9 @@ public abstract class IntegrationTest {
     }
 
     protected AwsCredentialsProvider getBuddyCredentials() {
+        StsClient stsClient = StsClient.builder().region(Region.US_WEST_2).build();
         return StsAssumeRoleCredentialsProvider
-                .builder().refreshRequest(
+                .builder().stsClient(stsClient).refreshRequest(
                         AssumeRoleRequest.builder().roleArn(getBuddyRoleARN()).roleSessionName(testSuiteName()).build()
                 ).build();
     }
