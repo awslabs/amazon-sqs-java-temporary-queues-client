@@ -45,7 +45,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
             setupClient(null);
             client.createQueue(CreateQueueRequest.builder()
                     .queueName(queueNamePrefix + "InvalidQueue")
-                    .attributesWithStrings(Collections.singletonMap(QueueAttributeName.FIFO_QUEUE.name(), "true")).build());
+                    .attributesWithStrings(Collections.singletonMap(QueueAttributeName.FIFO_QUEUE.toString(), "true")).build());
         });
     }
 

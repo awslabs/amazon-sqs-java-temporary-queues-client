@@ -96,7 +96,7 @@ public class AmazonSQSTemporaryQueuesClientCrossAccountIT extends IntegrationTes
         String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
         CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
                 .queueName(queueNamePrefix + "TestQueueWithAccess")
-                .attributesWithStrings(Collections.singletonMap(QueueAttributeName.POLICY.name(), policyString)).build();
+                .attributesWithStrings(Collections.singletonMap(QueueAttributeName.POLICY.toString(), policyString)).build();
 
         String queueUrl = client.createQueue(createQueueRequest).queueUrl();
         try {

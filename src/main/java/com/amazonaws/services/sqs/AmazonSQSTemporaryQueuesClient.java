@@ -38,15 +38,15 @@ class AmazonSQSTemporaryQueuesClient extends AbstractAmazonSQSClientWrapper {
     // We don't necessary support all queue attributes - some will behave differently on a virtual queue
     // In particular, a virtual FIFO queue will deduplicate at the scope of its host queue!
     private final static Set<String> SUPPORTED_QUEUE_ATTRIBUTES = new HashSet<>(Arrays.asList(
-            QueueAttributeName.DELAY_SECONDS.name(),
-            QueueAttributeName.MAXIMUM_MESSAGE_SIZE.name(),
-            QueueAttributeName.MESSAGE_RETENTION_PERIOD.name(),
-            QueueAttributeName.POLICY.name(),
-            QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS.name(),
-            QueueAttributeName.REDRIVE_POLICY.name(),
-            QueueAttributeName.VISIBILITY_TIMEOUT.name(),
-            QueueAttributeName.KMS_MASTER_KEY_ID.name(),
-            QueueAttributeName.KMS_DATA_KEY_REUSE_PERIOD_SECONDS.name()));
+            QueueAttributeName.DELAY_SECONDS.toString(),
+            QueueAttributeName.MAXIMUM_MESSAGE_SIZE.toString(),
+            QueueAttributeName.MESSAGE_RETENTION_PERIOD.toString(),
+            QueueAttributeName.POLICY.toString(),
+            QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS.toString(),
+            QueueAttributeName.REDRIVE_POLICY.toString(),
+            QueueAttributeName.VISIBILITY_TIMEOUT.toString(),
+            QueueAttributeName.KMS_MASTER_KEY_ID.toString(),
+            QueueAttributeName.KMS_DATA_KEY_REUSE_PERIOD_SECONDS.toString()));
 
     // These clients are owned by this one, and need to be shutdown when this client is.
     private final AmazonSQSIdleQueueDeletingClient deleter;
