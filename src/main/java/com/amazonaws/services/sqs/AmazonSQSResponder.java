@@ -1,10 +1,10 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.services.sqs.AmazonSQS;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 public interface AmazonSQSResponder {
-    
-    AmazonSQS getAmazonSQS();
+
+    SqsClient getAmazonSQS();
 
     /**
      * Tests whether the given message was sent using

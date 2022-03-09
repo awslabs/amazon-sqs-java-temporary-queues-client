@@ -12,9 +12,9 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageSystemAttributeName;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeName;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class SQSScheduledExecutorService extends SQSExecutorService implements ScheduledExecutorService {
 
@@ -80,8 +80,8 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
         }
 
         protected void decrementDelay(Message message) {
-            long sendTimestamp = Long.parseLong(message.getAttributes().get(MessageSystemAttributeName.SentTimestamp.toString()));
-            long receiveTimestamp = Long.parseLong(message.getAttributes().get(MessageSystemAttributeName.ApproximateFirstReceiveTimestamp.toString()));
+            long sendTimestamp = Long.parseLong(message.attributesAsStrings().get(MessageSystemAttributeName.SENT_TIMESTAMP.toString()));
+            long receiveTimestamp = Long.parseLong(message.attributesAsStrings().get(MessageSystemAttributeName.APPROXIMATE_FIRST_RECEIVE_TIMESTAMP.toString()));
             long dwellTime = receiveTimestamp - sendTimestamp;
             this.delay -= TimeUnit.NANOSECONDS.convert(dwellTime, TimeUnit.MILLISECONDS);
             messageContent.setMessageAttributesEntry(DELAY_NANOS_ATTRIBUTE_NAME, 
@@ -123,7 +123,7 @@ public class SQSScheduledExecutorService extends SQSExecutorService implements S
             SendMessageRequest request = super.toSendMessageRequest();
 
             int sqsDelaySeconds = Math.max(1, (int)Math.min(TimeUnit.NANOSECONDS.toSeconds(delay), MAX_SQS_DELAY_SECONDS));
-            request.setDelaySeconds(sqsDelaySeconds);
+            request = request.toBuilder().delaySeconds(sqsDelaySeconds).build();
 
             return request;
         }

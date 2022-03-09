@@ -9,43 +9,45 @@ import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.sqs.model.QueueNameExistsException;
-import com.amazonaws.services.sqs.model.TagQueueRequest;
 import com.amazonaws.services.sqs.util.Constants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchResult;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.CreateQueueResult;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageResult;
-import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.DeleteQueueResult;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.QueueDeletedRecentlyException;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiptHandleIsInvalidException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchResult;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageResult;
-import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.SetQueueAttributesResult;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.DaemonThreadFactory;
 import com.amazonaws.services.sqs.util.ReceiveQueueBuffer;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchResponse;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityResponse;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.CreateQueueResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueResponse;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.QueueDeletedRecentlyException;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.QueueNameExistsException;
+import software.amazon.awssdk.services.sqs.model.ReceiptHandleIsInvalidException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
 
 /**
  * An AmazonSQS wrapper that adds automatically deletes unused queues after a configurable
@@ -97,7 +99,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     private IdleQueueSweeper idleQueueSweeper;
     private String deadLetterQueueUrl;
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix, Long heartbeatIntervalSeconds) {
+    public AmazonSQSIdleQueueDeletingClient(SqsClient sqs, String queueNamePrefix, Long heartbeatIntervalSeconds) {
         super(sqs);
         
         if (queueNamePrefix.isEmpty()) {
@@ -119,7 +121,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         }
     }
 
-    public AmazonSQSIdleQueueDeletingClient(AmazonSQS sqs, String queueNamePrefix) {
+    public AmazonSQSIdleQueueDeletingClient(SqsClient sqs, String queueNamePrefix) {
         this(sqs, queueNamePrefix, null);
     }
 
@@ -135,17 +137,17 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         // will already be encrypted in the primary queue, and dead-lettering doesn't affect that.
         // The messages will still be receivable from the DLQ regardless.
         Map<String, String> dlqAttributes = new HashMap<>();
-        dlqAttributes.put(QueueAttributeName.MessageRetentionPeriod.name(), Long.toString(DLQ_MESSAGE_RETENTION_PERIOD));
+        dlqAttributes.put(QueueAttributeName.MESSAGE_RETENTION_PERIOD.toString(), Long.toString(DLQ_MESSAGE_RETENTION_PERIOD));
         deadLetterQueueUrl = createOrUpdateQueue(queueNamePrefix + SWEEPING_QUEUE_DLQ_SUFFIX, dlqAttributes);
-        String deadLetterQueueArn = super.getQueueAttributes(deadLetterQueueUrl,
-                Collections.singletonList(QueueAttributeName.QueueArn.name()))
-                        .getAttributes().get(QueueAttributeName.QueueArn.name());
+        GetQueueAttributesRequest getQueueAttributesRequest = GetQueueAttributesRequest.builder()
+                .queueUrl(deadLetterQueueUrl).attributeNamesWithStrings(QueueAttributeName.QUEUE_ARN.toString()).build();
+        String deadLetterQueueArn = super.getQueueAttributes(getQueueAttributesRequest).attributesAsStrings().get(QueueAttributeName.QUEUE_ARN.toString());
 
         Map<String, String> queueAttributes = new HashMap<>();
         // Server-side encryption is important here because we're putting
         // queue URLs into this queue.
-        queueAttributes.put(QueueAttributeName.KmsMasterKeyId.toString(), "alias/aws/sqs");
-        queueAttributes.put(QueueAttributeName.RedrivePolicy.toString(),
+        queueAttributes.put(QueueAttributeName.KMS_MASTER_KEY_ID.toString(), "alias/aws/sqs");
+        queueAttributes.put(QueueAttributeName.REDRIVE_POLICY.toString(),
                 "{\"maxReceiveCount\":\"5\", \"deadLetterTargetArn\":\"" + deadLetterQueueArn + "\"}");
         // TODO-RS: Configure a tight MessageRetentionPeriod! Put explicit thought
         // into other configuration as well.
@@ -157,49 +159,52 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
 
     private String createOrUpdateQueue(String name, Map<String, String> attributes) {
         try {
-            return super.createQueue(new CreateQueueRequest()
-                    .withQueueName(name)
-                    .withAttributes(attributes)).getQueueUrl();
+            return super.createQueue(CreateQueueRequest.builder()
+                    .queueName(name)
+                    .attributesWithStrings(attributes).build()).queueUrl();
         } catch (QueueNameExistsException e) {
-            String queueUrl = super.getQueueUrl(name).getQueueUrl();
-            super.setQueueAttributes(new SetQueueAttributesRequest()
-                    .withQueueUrl(queueUrl)
-                    .withAttributes(attributes));
+            String queueUrl = super.getQueueUrl(GetQueueUrlRequest.builder().queueName(name).build()).queueUrl();
+            super.setQueueAttributes(SetQueueAttributesRequest.builder()
+                    .queueUrl(queueUrl)
+                    .attributesWithStrings(attributes).build());
             return queueUrl;
         }
     }
 
     @Override
-    public CreateQueueResult createQueue(CreateQueueRequest request) {
-        Map<String, String> attributes = new HashMap<>(request.getAttributes());
+    public CreateQueueResponse createQueue(CreateQueueRequest request) {
+        Map<String, String> attributes = new HashMap<>(request.attributesAsStrings());
         Optional<Long> retentionPeriod = getRetentionPeriod(attributes);
         if (!retentionPeriod.isPresent()) {
             return super.createQueue(request);
         }
 
-        String queueName = request.getQueueName();
+        String queueName = request.queueName();
         if (!queueName.startsWith(queueNamePrefix)) {
             throw new IllegalArgumentException();
         }
 
         String retentionPeriodString = retentionPeriod.get().toString();
         long currentTimestamp = System.currentTimeMillis();
-        CreateQueueRequest superRequest = request.clone()
-                .withQueueName(queueName)
-                .withAttributes(attributes);
+        CreateQueueRequest superRequest = request.toBuilder().copy()
+                .queueName(queueName)
+                .attributesWithStrings(attributes).build();
 
-        CreateQueueResult result = super.createQueue(superRequest);
-        String queueUrl = result.getQueueUrl();
+        CreateQueueResponse result = super.createQueue(superRequest);
+        String queueUrl = result.queueUrl();
 
-        TagQueueRequest tagQueueRequest = new TagQueueRequest().withQueueUrl(queueUrl)
-                .addTagsEntry(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString)
-                .addTagsEntry(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
-        amazonSqsToBeExtended.tagQueue(tagQueueRequest);
+        Map<String, String> tags = new HashMap<>();
+        tags.put(IDLE_QUEUE_RETENTION_PERIOD_TAG, retentionPeriodString);
+        tags.put(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
+        TagQueueRequest.Builder tagQueueBuilder = TagQueueRequest.builder().queueUrl(queueUrl).tags(tags);
+        amazonSqsToBeExtended.tagQueue(tagQueueBuilder.build());
 
         // TODO-RS: Filter more carefully to all attributes valid for createQueue 
-        List<String> attributeNames = Arrays.asList(QueueAttributeName.ReceiveMessageWaitTimeSeconds.toString(),
-                                                    QueueAttributeName.VisibilityTimeout.toString());
-        Map<String, String> createdAttributes = amazonSqsToBeExtended.getQueueAttributes(queueUrl, attributeNames).getAttributes();
+        List<String> attributeNames = Arrays.asList(QueueAttributeName.RECEIVE_MESSAGE_WAIT_TIME_SECONDS.toString(),
+                                                    QueueAttributeName.VISIBILITY_TIMEOUT.toString());
+        GetQueueAttributesRequest.Builder getQueueAttributesBuilder = GetQueueAttributesRequest.builder()
+                .queueUrl(queueUrl).attributeNamesWithStrings(attributeNames);
+        Map<String, String> createdAttributes = new HashMap<>(amazonSqsToBeExtended.getQueueAttributes(getQueueAttributesBuilder.build()).attributesAsStrings());
         createdAttributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, retentionPeriodString);
 
         QueueMetadata metadata = new QueueMetadata(queueName, queueUrl, createdAttributes);
@@ -227,33 +232,33 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
     
     @Override
-    public GetQueueAttributesResult getQueueAttributes(GetQueueAttributesRequest request) {
-        QueueMetadata metadata = queues.get(request.getQueueUrl());
+    public GetQueueAttributesResponse getQueueAttributes(GetQueueAttributesRequest request) {
+        QueueMetadata metadata = queues.get(request.queueUrl());
         if (metadata != null) {
             Map<String, String> filteredAttributes = new HashMap<>(metadata.attributes);
-            filteredAttributes.keySet().retainAll(request.getAttributeNames());
-            return new GetQueueAttributesResult().withAttributes(filteredAttributes);
+            filteredAttributes.keySet().retainAll(request.attributeNamesAsStrings());
+            return GetQueueAttributesResponse.builder().attributesWithStrings(filteredAttributes).build();
         }
 
         return super.getQueueAttributes(request);
     }
 
     @Override
-    public SetQueueAttributesResult setQueueAttributes(SetQueueAttributesRequest request) {
-        SetQueueAttributesResult result = super.setQueueAttributes(request);
+    public SetQueueAttributesResponse setQueueAttributes(SetQueueAttributesRequest request) {
+        SetQueueAttributesResponse result = super.setQueueAttributes(request);
 
-        QueueMetadata queue = queues.get(request.getQueueUrl());
+        QueueMetadata queue = queues.get(request.queueUrl());
         if (queue != null) {
-            queue.attributes.putAll(request.getAttributes());
+            queue.attributes.putAll(request.attributesAsStrings());
         }
 
         return result;
     }
 
     @Override
-    public DeleteQueueResult deleteQueue(DeleteQueueRequest request) {
-        DeleteQueueResult result = super.deleteQueue(request);
-        queueDeleted(request.getQueueUrl());
+    public DeleteQueueResponse deleteQueue(DeleteQueueRequest request) {
+        DeleteQueueResponse result = super.deleteQueue(request);
+        queueDeleted(request.queueUrl());
         return result;
     }
 
@@ -267,7 +272,7 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         String alternateQueueUrl = alternateQueueName(queueUrl);
         QueueMetadata alternateMetadata = queues.remove(alternateQueueUrl);
         if (alternateMetadata != null) {
-            super.deleteQueue(alternateQueueUrl);
+            super.deleteQueue(DeleteQueueRequest.builder().queueUrl(alternateQueueUrl).build());
             alternateMetadata.heartbeater.cancel(true);
             alternateMetadata.buffer.shutdown();
         }
@@ -277,8 +282,11 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         // TODO-RS: Clock drift? Shouldn't realistically be a problem as long as the idleness threshold is long enough.
         long currentTimestamp = System.currentTimeMillis();
         try {
-            amazonSqsToBeExtended.tagQueue(queueUrl, 
-                    Collections.singletonMap(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp)));
+            Map<String, String> tags = new HashMap<>();
+            tags.put(LAST_HEARTBEAT_TIMESTAMP_TAG, String.valueOf(currentTimestamp));
+            TagQueueRequest.Builder tagQueueBuilder = TagQueueRequest.builder()
+                    .queueUrl(queueUrl).tags(tags);
+            amazonSqsToBeExtended.tagQueue(tagQueueBuilder.build());
         } catch (QueueDoesNotExistException e) {
             recreateQueue(queueUrl);
             // TODO-RS: Retry right away
@@ -308,8 +316,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         if (queue != null) {
             LOG.warn("Queue " + queueUrl + " was deleted while it was still in use! Attempting to recreate...");
             try {
-                createQueue(new CreateQueueRequest().withQueueName(queue.name)
-                        .withAttributes(queue.attributes));
+                createQueue(CreateQueueRequest.builder().queueName(queue.name)
+                        .attributesWithStrings(queue.attributes).build());
                 LOG.info("Queue " + queueUrl + " successfully recreated.");
                 return queueUrl;
             } catch (QueueDeletedRecentlyException e) {
@@ -323,8 +331,8 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
         if (metadata == null && queue != null) {
             LOG.info("Attempting to create failover queue: " + alternateQueueUrl);
             try {
-                createQueue(new CreateQueueRequest().withQueueName(alternateQueueName(queue.name))
-                        .withAttributes(queue.attributes));
+                createQueue(CreateQueueRequest.builder().queueName(alternateQueueName(queue.name))
+                        .attributesWithStrings(queue.attributes).build());
                 LOG.info("Failover queue " + alternateQueueUrl + " successfully created.");
             } catch (QueueDeletedRecentlyException e) {
                 // Ignore, will retry later
@@ -339,122 +347,122 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
 
     @Override
-    public SendMessageResult sendMessage(SendMessageRequest request) {
+    public SendMessageResponse sendMessage(SendMessageRequest request) {
         try {
-            heartbeatToQueueIfNecessary(request.getQueueUrl());
+            heartbeatToQueueIfNecessary(request.queueUrl());
             return super.sendMessage(request);
         } catch (QueueDoesNotExistException e) {
-            request.setQueueUrl(recreateQueue(request.getQueueUrl()));
-            return super.sendMessage(request);
+            SendMessageRequest newRequest = request.toBuilder().queueUrl(recreateQueue(request.queueUrl())).build();
+            return super.sendMessage(newRequest);
         }
     }
 
     @Override
-    public SendMessageBatchResult sendMessageBatch(SendMessageBatchRequest request) {
+    public SendMessageBatchResponse sendMessageBatch(SendMessageBatchRequest request) {
         try {
-            heartbeatToQueueIfNecessary(request.getQueueUrl());
+            heartbeatToQueueIfNecessary(request.queueUrl());
             return super.sendMessageBatch(request);
         } catch (QueueDoesNotExistException e) {
-            request.setQueueUrl(recreateQueue(request.getQueueUrl()));
-            return super.sendMessageBatch(request);
+            SendMessageBatchRequest newRequest = request.toBuilder().queueUrl(recreateQueue(request.queueUrl())).build();
+            return super.sendMessageBatch(newRequest);
         }
     }
 
     @Override
-    public ReceiveMessageResult receiveMessage(ReceiveMessageRequest request) {
+    public ReceiveMessageResponse receiveMessage(ReceiveMessageRequest request) {
         // Here we have to also fetch from the backup queue if we created it.
-        String queueUrl = request.getQueueUrl();
+        String queueUrl = request.queueUrl();
         String alternateQueueUrl = alternateQueueName(queueUrl);
         QueueMetadata alternateMetadata = queues.get(alternateQueueUrl);
         if (alternateMetadata != null) {
             ReceiveQueueBuffer buffer = alternateMetadata.buffer;
-            ReceiveMessageRequest alternateRequest = request.clone().withQueueUrl(alternateQueueUrl);
+            ReceiveMessageRequest alternateRequest = request.toBuilder().copy().queueUrl(alternateQueueUrl).build();
             buffer.submit(executor, () -> receiveIgnoringNonExistantQueue(request),
-                    queueUrl, request.getVisibilityTimeout());
+                    queueUrl, request.visibilityTimeout());
             buffer.submit(executor, () -> receiveIgnoringNonExistantQueue(alternateRequest),
-                    queueUrl, request.getVisibilityTimeout());
-            Future<ReceiveMessageResult> receiveFuture = buffer.receiveMessageAsync(request);
+                    queueUrl, request.visibilityTimeout());
+            Future<ReceiveMessageResponse> receiveFuture = buffer.receiveMessageAsync(request);
             return SQSQueueUtils.waitForFuture(receiveFuture);
         } else {
             try {
                 heartbeatToQueueIfNecessary(queueUrl);
                 return super.receiveMessage(request);
             } catch (QueueDoesNotExistException e) {
-                request.setQueueUrl(recreateQueue(queueUrl));
-                return super.receiveMessage(request);
+                ReceiveMessageRequest newRequest = request.toBuilder().queueUrl(recreateQueue(queueUrl)).build();
+                return super.receiveMessage(newRequest);
             }
         }
     }
 
     private List<Message> receiveIgnoringNonExistantQueue(ReceiveMessageRequest request) {
         try {
-            heartbeatToQueueIfNecessary(request.getQueueUrl());
-            return amazonSqsToBeExtended.receiveMessage(request).getMessages();
+            heartbeatToQueueIfNecessary(request.queueUrl());
+            return amazonSqsToBeExtended.receiveMessage(request).messages();
         } catch (QueueDoesNotExistException e) {
             return Collections.emptyList();
         }
     }
 
     @Override
-    public ChangeMessageVisibilityResult changeMessageVisibility(ChangeMessageVisibilityRequest request) {
+    public ChangeMessageVisibilityResponse changeMessageVisibility(ChangeMessageVisibilityRequest request) {
         // If the queue is deleted, there's no way to change the message visibility.
         try {
             return super.changeMessageVisibility(request);
         } catch (QueueDoesNotExistException|ReceiptHandleIsInvalidException e) {
             // Try on the alternate queue
             return super.changeMessageVisibility(
-                    request.clone().withQueueUrl(alternateQueueName(request.getQueueUrl())));
+                    request.toBuilder().copy().queueUrl(alternateQueueName(request.queueUrl())).build());
         }
     }
 
     @Override
-    public ChangeMessageVisibilityBatchResult changeMessageVisibilityBatch(ChangeMessageVisibilityBatchRequest request) {
+    public ChangeMessageVisibilityBatchResponse changeMessageVisibilityBatch(ChangeMessageVisibilityBatchRequest request) {
         // If the queue is deleted, there's no way to change the message visibility.
         try {
             return super.changeMessageVisibilityBatch(request);
         } catch (QueueDoesNotExistException|ReceiptHandleIsInvalidException e) {
             // Try on the alternate queue
-            ChangeMessageVisibilityBatchRequest alternateRequest = request.clone().withQueueUrl(alternateQueueName(request.getQueueUrl()));
+            ChangeMessageVisibilityBatchRequest alternateRequest = request.toBuilder().copy().queueUrl(alternateQueueName(request.queueUrl())).build();
             return super.changeMessageVisibilityBatch(alternateRequest);
         }
     }
 
     @Override
-    public DeleteMessageResult deleteMessage(DeleteMessageRequest request) {
-        String queueUrl = request.getQueueUrl();
+    public DeleteMessageResponse deleteMessage(DeleteMessageRequest request) {
+        String queueUrl = request.queueUrl();
         try {
             heartbeatToQueueIfNecessary(queueUrl);
             return super.deleteMessage(request);
         } catch (QueueDoesNotExistException|ReceiptHandleIsInvalidException e) {
             try {
                 return super.deleteMessage(
-                        request.clone().withQueueUrl(alternateQueueName(request.getQueueUrl())));
+                        request.toBuilder().copy().queueUrl(alternateQueueName(request.queueUrl())).build());
             } catch (QueueDoesNotExistException e2) {
                 // Silently fail - the message is definitely deleted after all!
-                return new DeleteMessageResult();
+                return DeleteMessageResponse.builder().build();
             }
         }
     }
 
     @Override
-    public DeleteMessageBatchResult deleteMessageBatch(DeleteMessageBatchRequest request) {
-        String queueUrl = request.getQueueUrl();
+    public DeleteMessageBatchResponse deleteMessageBatch(DeleteMessageBatchRequest request) {
+        String queueUrl = request.queueUrl();
         try {
             heartbeatToQueueIfNecessary(queueUrl);
             return super.deleteMessageBatch(request);
         } catch (QueueDoesNotExistException e) {
             try {
                 return super.deleteMessageBatch(
-                        request.clone().withQueueUrl(alternateQueueName(request.getQueueUrl())));
+                        request.toBuilder().copy().queueUrl(alternateQueueName(request.queueUrl())).build());
             } catch (QueueDoesNotExistException e2) {
                 // Silently fail - the message is definitely deleted after all!
-                return new DeleteMessageBatchResult();
+                return DeleteMessageBatchResponse.builder().build();
             }
         }
     }
 
     @Override
-    public void shutdown() {
+    public void close() {
         if (idleQueueSweeper != null) {
             idleQueueSweeper.shutdown();
         }
@@ -462,12 +470,12 @@ class AmazonSQSIdleQueueDeletingClient extends AbstractAmazonSQSClientWrapper {
     }
     
     public void teardown() {
-        shutdown();
+        close();
         if (idleQueueSweeper != null) {
-            amazonSqsToBeExtended.deleteQueue(idleQueueSweeper.getQueueUrl());
+            amazonSqsToBeExtended.deleteQueue(DeleteQueueRequest.builder().queueUrl(idleQueueSweeper.getQueueUrl()).build());
         }
         if (deadLetterQueueUrl != null) {
-            amazonSqsToBeExtended.deleteQueue(deadLetterQueueUrl);
+            amazonSqsToBeExtended.deleteQueue(DeleteQueueRequest.builder().queueUrl(deadLetterQueueUrl).build());
         }
     }
 }

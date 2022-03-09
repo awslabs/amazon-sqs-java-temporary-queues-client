@@ -11,10 +11,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 
 /**
  * A very basic utility class for continuously polling for messages from an
@@ -27,7 +29,7 @@ import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
  */
 public class SQSMessageConsumer implements AutoCloseable {
 
-    protected final AmazonSQS sqs;
+    protected final SqsClient sqs;
     protected final String queueUrl;
     protected final Consumer<Message> consumer;
     protected final Consumer<Exception> exceptionHandler;
@@ -53,7 +55,7 @@ public class SQSMessageConsumer implements AutoCloseable {
      * @deprecated Please use {@link SQSMessageConsumerBuilder} instead.
      */
     @Deprecated
-    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer) {
+    public SQSMessageConsumer(SqsClient sqs, String queueUrl, Consumer<Message> consumer) {
         this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER);
     }
 
@@ -61,12 +63,12 @@ public class SQSMessageConsumer implements AutoCloseable {
      * @deprecated Please use {@link SQSMessageConsumerBuilder} instead.
      */
     @Deprecated
-    public SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+    public SQSMessageConsumer(SqsClient sqs, String queueUrl, Consumer<Message> consumer,
                               Runnable shutdownHook, Consumer<Exception> exceptionHandler) {
         this(sqs, queueUrl, consumer, () -> {}, SQSQueueUtils.DEFAULT_EXCEPTION_HANDLER, 20, 1);
     }
     
-    SQSMessageConsumer(AmazonSQS sqs, String queueUrl, Consumer<Message> consumer,
+    SQSMessageConsumer(SqsClient sqs, String queueUrl, Consumer<Message> consumer,
                        Runnable shutdownHook, Consumer<Exception> exceptionHandler,
                        int maxWaitTimeSeconds, int pollingThreadCount) {
         this.sqs = Objects.requireNonNull(sqs);
@@ -109,13 +111,13 @@ public class SQSMessageConsumer implements AutoCloseable {
                 }
     
                 try {
-                    ReceiveMessageRequest request = new ReceiveMessageRequest()
-                            .withQueueUrl(queueUrl)
-                            .withWaitTimeSeconds(waitTimeSeconds)
-                            .withMaxNumberOfMessages(10)
-                            .withMessageAttributeNames(ATTRIBUTE_NAMES_ALL)
-                            .withAttributeNames(ATTRIBUTE_NAMES_ALL);
-                    List<Message> messages = sqs.receiveMessage(request).getMessages();
+                    ReceiveMessageRequest.Builder requestBuilder = ReceiveMessageRequest.builder()
+                            .queueUrl(queueUrl)
+                            .waitTimeSeconds(waitTimeSeconds)
+                            .maxNumberOfMessages(10)
+                            .messageAttributeNames(ATTRIBUTE_NAMES_ALL)
+                            .attributeNamesWithStrings(ATTRIBUTE_NAMES_ALL);
+                    List<Message> messages = sqs.receiveMessage(requestBuilder.build()).messages();
     
                     messages.parallelStream().forEach(this::handleMessage);
                 } catch (QueueDoesNotExistException e) {
@@ -138,25 +140,31 @@ public class SQSMessageConsumer implements AutoCloseable {
 
     private void handleMessage(Message message) {
         if (shuttingDown.get()) {
-            sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+            ChangeMessageVisibilityRequest.Builder requestBuilder = ChangeMessageVisibilityRequest.builder()
+                    .queueUrl(queueUrl).receiptHandle(message.receiptHandle()).visibilityTimeout(0);
+            sqs.changeMessageVisibility(requestBuilder.build());
             return;
         }
         try {
             accept(message);
-            sqs.deleteMessage(queueUrl, message.getReceiptHandle());
+            DeleteMessageRequest.Builder deleteMessageBuilder = DeleteMessageRequest.builder()
+                    .queueUrl(queueUrl).receiptHandle(message.receiptHandle());
+            sqs.deleteMessage(deleteMessageBuilder.build());
         } catch (QueueDoesNotExistException e) {
             // Ignore
         } catch (RuntimeException processingException) {
             // TODO-RS: separate accept from delete in exception handling
-            String errorMessage = "Exception encountered while processing message with ID " + message.getMessageId();
+            String errorMessage = "Exception encountered while processing message with ID " + message.messageId();
             exceptionHandler.accept(new RuntimeException(errorMessage, processingException));
             
             try {
-                sqs.changeMessageVisibility(queueUrl, message.getReceiptHandle(), 0);
+                ChangeMessageVisibilityRequest.Builder requestBuilder = ChangeMessageVisibilityRequest.builder()
+                        .queueUrl(queueUrl).receiptHandle(message.receiptHandle()).visibilityTimeout(0);
+                sqs.changeMessageVisibility(requestBuilder.build());
             } catch (QueueDoesNotExistException e) {
                 // Ignore
             } catch (RuntimeException cmvException) {
-                String cmvErrorMessage = "Exception encountered while changing message visibility with ID " + message.getMessageId();
+                String cmvErrorMessage = "Exception encountered while changing message visibility with ID " + message.messageId();
                 exceptionHandler.accept(new RuntimeException(cmvErrorMessage, cmvException));
             }
         }

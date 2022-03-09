@@ -17,6 +17,17 @@ Temporary queues are also automatically deleted if the clients that created them
 2. Sign in to the [Amazon SQS console](https://console.aws.amazon.com/sqs/home?region=us-east-1).
 3. To use the Temporary Queue client, you'll need [Java 8 (or later)](https://www.java.com/en/download/) and [Maven 3](http://maven.apache.org/).
 4. [Download the latest release](https://github.com/awslabs/amazon-sqs-java-temporary-queues-client/releases) or add a Maven dependency into your `pom.xml` file:
+### Version 2.x
+```xml
+  <dependency>
+    <groupId>com.amazonaws</groupId>
+    <artifactId>amazon-sqs-java-temporary-queues-client</artifactId>
+    <version>2.0.0</version>
+    <type>jar</type>
+  </dependency>
+```
+
+### Version 1.x
 ```xml
   <dependency>
     <groupId>com.amazonaws</groupId>

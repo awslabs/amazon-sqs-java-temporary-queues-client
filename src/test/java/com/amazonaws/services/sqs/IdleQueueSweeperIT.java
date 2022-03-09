@@ -8,10 +8,11 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
 
 public class IdleQueueSweeperIT extends IntegrationTest {
 
@@ -24,7 +25,8 @@ public class IdleQueueSweeperIT extends IntegrationTest {
     public void setup() {
         requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).withIdleQueueSweepingPeriod(0, TimeUnit.SECONDS).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
-        sweepingQueueUrl = sqs.createQueue(queueNamePrefix).getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueNamePrefix).build();
+        sweepingQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
         sweeper = new IdleQueueSweeper(requester, responder, sweepingQueueUrl, queueNamePrefix, 5, TimeUnit.SECONDS, exceptionHandler);
     }
     
@@ -35,7 +37,7 @@ public class IdleQueueSweeperIT extends IntegrationTest {
             sweeper.awaitTermination(30, TimeUnit.SECONDS);
         }
         if (sweepingQueueUrl != null) {
-            sqs.deleteQueue(sweepingQueueUrl);
+            sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(sweepingQueueUrl).build());
         }
         if (responder != null) {
             responder.shutdown();
@@ -47,11 +49,13 @@ public class IdleQueueSweeperIT extends IntegrationTest {
     
     @Test
     public void idleQueueSweeper() throws InterruptedException {
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix + "-IdleQueue");
-        String idleQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
-        sqs.tagQueue(idleQueueUrl, Collections.singletonMap(
-                AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG, "1"));
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "-IdleQueue").build();
+        String idleQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
+        TagQueueRequest tagQueueRequest = TagQueueRequest.builder()
+                .queueUrl(idleQueueUrl).tags(Collections.singletonMap(
+                        AmazonSQSIdleQueueDeletingClient.IDLE_QUEUE_RETENTION_PERIOD_TAG, "1")).build();
+        sqs.tagQueue(tagQueueRequest);
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
         Assert.assertTrue("Expected queue to be deleted: " + idleQueueUrl,

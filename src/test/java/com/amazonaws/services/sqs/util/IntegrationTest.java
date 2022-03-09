@@ -3,28 +3,26 @@ package com.amazonaws.services.sqs.util;
 import java.util.Collections;
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
-import com.amazonaws.auth.policy.Policy;
-import com.amazonaws.auth.policy.Principal;
-import com.amazonaws.auth.policy.Resource;
-import com.amazonaws.auth.policy.Statement;
-import com.amazonaws.auth.policy.actions.SQSActions;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
-import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
-import com.amazonaws.services.securitytoken.model.Credentials;
-import com.amazonaws.services.securitytoken.model.GetCallerIdentityRequest;
-import com.amazonaws.services.sqs.model.AmazonSQSException;
 import org.junit.After;
 import org.junit.Before;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.core.auth.policy.Action;
+import software.amazon.awssdk.core.auth.policy.Policy;
+import software.amazon.awssdk.core.auth.policy.Principal;
+import software.amazon.awssdk.core.auth.policy.Resource;
+import software.amazon.awssdk.core.auth.policy.Statement;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SqsException;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assume.assumeNoException;
@@ -36,7 +34,7 @@ import static org.junit.Assume.assumeTrue;
  */
 public abstract class IntegrationTest {
     
-    protected AmazonSQS sqs;
+    protected SqsClient sqs;
     // UUIDs are too long for this
     protected String queueNamePrefix = "__" + testSuiteName() + "-" + ThreadLocalRandom.current().nextInt(1000000);
     protected ExceptionAsserter exceptionHandler = new ExceptionAsserter();
@@ -50,7 +48,7 @@ public abstract class IntegrationTest {
 
     @Before
     public void setupSQSClient() {
-        sqs = AmazonSQSClientBuilder.defaultClient();
+        sqs = SqsClient.create();
     }
     
     @After
@@ -58,14 +56,14 @@ public abstract class IntegrationTest {
         if (sqs != null) {
             // Best effort cleanup of queues. To be complete, we'd have to wait a minute
             // for the eventual consistency of listQueues()
-            sqs.listQueues(queueNamePrefix).getQueueUrls().forEach(queueUrl -> {
+            sqs.listQueues(ListQueuesRequest.builder().queueNamePrefix(queueNamePrefix).build()).queueUrls().forEach(queueUrl -> {
                 try {
-                    sqs.deleteQueue(queueUrl);
+                    sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
                 } catch (QueueDoesNotExistException e) {
                     // Ignore
                 }
             });
-            sqs.shutdown();
+            sqs.close();
         }
         exceptionHandler.assertNothingThrown();
     }
@@ -78,36 +76,42 @@ public abstract class IntegrationTest {
         return roleARN;
     }
 
-    protected AWSCredentialsProvider getBuddyCredentials() {
-        return new STSAssumeRoleSessionCredentialsProvider.Builder(getBuddyRoleARN(), testSuiteName()).build();
+    protected AwsCredentialsProvider getBuddyCredentials() {
+        StsClient stsClient = StsClient.builder().region(Region.US_WEST_2).build();
+        return StsAssumeRoleCredentialsProvider
+                .builder().stsClient(stsClient).refreshRequest(
+                        AssumeRoleRequest.builder().roleArn(getBuddyRoleARN()).roleSessionName(testSuiteName()).build()
+                ).build();
     }
 
-    protected AmazonSQS getBuddyPrincipalClient() {
-        AWSCredentialsProvider credentialsProvider = getBuddyCredentials();
-        AmazonSQS client = AmazonSQSClientBuilder.standard()
-                .withRegion("us-west-2")
-                .withCredentials(credentialsProvider)
+    protected SqsClient getBuddyPrincipalClient() {
+        AwsCredentialsProvider credentialsProvider = getBuddyCredentials();
+        SqsClient client = SqsClient.builder()
+                .region(Region.US_WEST_2)
+                .credentialsProvider(credentialsProvider)
                 .build();
 
         // Assume that the principal is not able to send messages to arbitrary queues
-        String queueUrl = sqs.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
+        String queueUrl = sqs.createQueue(CreateQueueRequest.builder().queueName(queueNamePrefix + "TestQueue").build()).queueUrl();
         try {
-            client.sendMessage(queueUrl, "Haxxors!!");
+            SendMessageRequest sendMessageRequest = SendMessageRequest.builder().queueUrl(queueUrl).messageBody("Haxxors!!").build();
+            client.sendMessage(sendMessageRequest);
             assumeTrue("The buddy credentials should not authorize sending to arbitrary queues", false);
-        } catch (AmazonSQSException e) {
+        } catch (SqsException e) {
             // Access Denied
-            assumeThat(e.getStatusCode(), equalTo(403));
+            assumeThat(e.statusCode(), equalTo(403));
         } finally {
-            sqs.deleteQueue(queueUrl);
+            sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }
 
         return client;
     }
 
     protected Policy allowSendMessagePolicy(String roleARN) {
+
         Policy policy = new Policy();
         Statement statement = new Statement(Statement.Effect.Allow);
-        statement.setActions(Collections.singletonList(SQSActions.SendMessage));
+        statement.setActions(Collections.singletonList(new Action("sqs:SendMessage")));
         statement.setPrincipals(new Principal(roleARN));
         statement.setResources(Collections.singletonList(new Resource("arn:aws:sqs:*:*:*")));
         policy.setStatements(Collections.singletonList(statement));

@@ -19,7 +19,7 @@ public enum DefaultSerializer implements InvertibleFunction<Object, byte[]> {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ObjectOutputStream out = new ObjectOutputStream(baos);
-                out.writeObject((Serializable)object);
+                out.writeObject(object);
                 return baos.toByteArray();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

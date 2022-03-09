@@ -1,6 +1,7 @@
 package com.amazonaws.services.sqs;
 
 import com.amazonaws.services.sqs.util.Constants;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 public class AmazonSQSRequesterClientBuilder {
 
-    private Optional<AmazonSQS> customSQS = Optional.empty();
+    private Optional<SqsClient> customSQS = Optional.empty();
 
     private String internalQueuePrefix = "__RequesterClientQueues__";
 
@@ -35,15 +36,15 @@ public class AmazonSQSRequesterClientBuilder {
         return standard().build();
     }
 
-    public Optional<AmazonSQS> getAmazonSQS() {
+    public Optional<SqsClient> getAmazonSQS() {
         return customSQS;
     }
 
-    public void setAmazonSQS(AmazonSQS sqs) {
+    public void setAmazonSQS(SqsClient sqs) {
         this.customSQS = Optional.of(sqs);
     }
 
-    public AmazonSQSRequesterClientBuilder withAmazonSQS(AmazonSQS sqs) {
+    public AmazonSQSRequesterClientBuilder withAmazonSQS(SqsClient sqs) {
         setAmazonSQS(sqs);
         return this;
     }

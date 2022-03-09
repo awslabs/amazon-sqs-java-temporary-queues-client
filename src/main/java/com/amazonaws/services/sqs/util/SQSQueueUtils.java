@@ -4,6 +4,7 @@ import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptIntOn;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.acceptOn;
 import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,18 +23,22 @@ import java.util.stream.Stream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.awscore.AwsRequest;
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
+import software.amazon.awssdk.core.ApiName;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class SQSQueueUtils {
-
     private static final Log LOG = LogFactory.getLog(SQSQueueUtils.class);
 
     public static final String ATTRIBUTE_NAMES_ALL = "All";
@@ -53,37 +58,37 @@ public class SQSQueueUtils {
     }
 
     public static MessageAttributeValue stringMessageAttributeValue(String value) {
-        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_STRING)
-                .withStringValue(value);
+        return MessageAttributeValue.builder().dataType(MESSAGE_ATTRIBUTE_TYPE_STRING)
+                .stringValue(value).build();
     }
 
     public static MessageAttributeValue longMessageAttributeValue(long value) {
-        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_LONG)
-                .withStringValue(Long.toString(value));
+        return MessageAttributeValue.builder().dataType(MESSAGE_ATTRIBUTE_TYPE_LONG)
+                .stringValue(Long.toString(value)).build();
     }
 
     public static MessageAttributeValue booleanMessageAttributeValue(boolean value) {
-        return new MessageAttributeValue().withDataType(MESSAGE_ATTRIBUTE_TYPE_BOOLEAN)
-                .withStringValue(Boolean.toString(value));
+        return MessageAttributeValue.builder().dataType(MESSAGE_ATTRIBUTE_TYPE_BOOLEAN)
+                .stringValue(Boolean.toString(value)).build();
     }
 
     public static Optional<String> getStringMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
         return Optional.ofNullable(messageAttributes.get(key))
-                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_STRING.equals(value.getDataType()))
-                .map(MessageAttributeValue::getStringValue);
+                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_STRING.equals(value.dataType()))
+                .map(MessageAttributeValue::stringValue);
     }
 
     public static Optional<Long> getLongMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
         return Optional.ofNullable(messageAttributes.get(key))
-                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_LONG.equals(value.getDataType()))
-                .map(MessageAttributeValue::getStringValue)
+                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_LONG.equals(value.dataType()))
+                .map(MessageAttributeValue::stringValue)
                 .map(Long::parseLong);
     }
 
     public static boolean getBooleanMessageAttributeValue(Map<String, MessageAttributeValue> messageAttributes, String key) {
         return Optional.ofNullable(messageAttributes.get(key))
-                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_BOOLEAN.equals(value.getDataType()))
-                .map(MessageAttributeValue::getStringValue)
+                .filter(value -> MESSAGE_ATTRIBUTE_TYPE_BOOLEAN.equals(value.dataType()))
+                .map(MessageAttributeValue::stringValue)
                 .map(Boolean::parseBoolean).orElse(false);
     }
 
@@ -99,20 +104,20 @@ public class SQSQueueUtils {
         VALID_QUEUE_NAME_CHARACTERS = builder.toString();
     }
 
-    public static boolean isQueueEmpty(AmazonSQS sqs, String queueUrl) {
-        QueueAttributeName[] messageCountAttrs = {
-                QueueAttributeName.ApproximateNumberOfMessages,
-                QueueAttributeName.ApproximateNumberOfMessagesDelayed,
-                QueueAttributeName.ApproximateNumberOfMessagesNotVisible
+    public static boolean isQueueEmpty(SqsClient sqs, String queueUrl) {
+        String[] messageCountAttrs = {
+                QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES.toString(),
+                QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_DELAYED.toString(),
+                QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE.toString()
         };
 
-        GetQueueAttributesRequest getQueueAttributesRequest = new GetQueueAttributesRequest()
-                .withQueueUrl(queueUrl)
-                .withAttributeNames(messageCountAttrs);
-        GetQueueAttributesResult result = sqs.getQueueAttributes(getQueueAttributesRequest);
-        Map<String, String> attrValues = result.getAttributes();
+        GetQueueAttributesRequest.Builder getQueueAttributesBuilder = GetQueueAttributesRequest.builder()
+                .queueUrl(queueUrl)
+                .attributeNamesWithStrings(messageCountAttrs);
+        GetQueueAttributesResponse result = sqs.getQueueAttributes(getQueueAttributesBuilder.build());
+        Map<String, String> attrValues = result.attributesAsStrings();
         return Stream.of(messageCountAttrs).allMatch(attr ->
-                Long.parseLong(attrValues.get(attr.name())) == 0);
+                Long.parseLong(attrValues.get(attr)) == 0);
     }
 
     public static boolean awaitWithPolling(long period, long timeout, TimeUnit unit, Supplier<Boolean> test) throws InterruptedException {
@@ -127,25 +132,26 @@ public class SQSQueueUtils {
         return true;
     }
 
-    public static boolean awaitEmptyQueue(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
+    public static boolean awaitEmptyQueue(SqsClient sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
         // There's no way to be directly notified unfortunately.
         return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> isQueueEmpty(sqs, queueUrl));
     }
 
-    public static boolean doesQueueExist(AmazonSQS sqs, String queueUrl) {
+    public static boolean doesQueueExist(SqsClient sqs, String queueUrl) {
         try {
-            sqs.listQueueTags(queueUrl);
+            ListQueueTagsRequest.Builder builder = ListQueueTagsRequest.builder().queueUrl(queueUrl);
+            sqs.listQueueTags(builder.build());
             return true;
         } catch (QueueDoesNotExistException e) {
             return false;
         }
     }
     
-    public static boolean awaitQueueCreated(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
+    public static boolean awaitQueueCreated(SqsClient sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
         return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> doesQueueExist(sqs, queueUrl));
     }
 
-    public static boolean awaitQueueDeleted(AmazonSQS sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
+    public static boolean awaitQueueDeleted(SqsClient sqs, String queueUrl, long timeout, TimeUnit unit) throws InterruptedException {
         return awaitWithPolling(unit.convert(2, TimeUnit.SECONDS), timeout, unit, () -> !doesQueueExist(sqs, queueUrl));
     }
 
@@ -166,11 +172,13 @@ public class SQSQueueUtils {
     }
 
     public static List<String> listQueues(ExecutorService executor, Function<String, List<String>> lister, String prefix, int limit) {
-        List<String> queueUrls = lister.apply(prefix);
+        List<String> queueUrls = new ArrayList<>(lister.apply(prefix));
+
         if (queueUrls.size() >= limit) {
             // Manually work around the 1000 queue limit by forking for each
             // possible next character. Yes this is exponential with a factor of
             // 64, but we only fork when the results are more than 1000.
+            List<List<String>> collect = VALID_QUEUE_NAME_CHARACTERS.chars().parallel().mapToObj(applyIntOn(executor, c -> listQueues(executor, lister, prefix + (char) c, limit))).collect(Collectors.toList());
             return VALID_QUEUE_NAME_CHARACTERS
                     .chars()
                     .parallel()
@@ -184,25 +192,25 @@ public class SQSQueueUtils {
     }
 
     public static CreateQueueRequest copyWithExtraAttributes(CreateQueueRequest request, Map<String, String> extraAttrs) {
-        Map<String, String> newAttributes = new HashMap<>(request.getAttributes());
+        Map<String, String> newAttributes = new HashMap<>(request.attributesAsStrings());
         newAttributes.putAll(extraAttrs);
 
-        // Clone to create a shallow copy that includes the superclass properties.
-        return request.clone()
-                .withQueueName(request.getQueueName())
-                .withAttributes(newAttributes);
+        // Create a shallow copy that includes the superclass properties.
+        return request.toBuilder().copy()
+                .queueName(request.queueName())
+                .attributesWithStrings(newAttributes).build();
     }
 
     public static SendMessageRequest copyWithExtraAttributes(SendMessageRequest request, Map<String, MessageAttributeValue> extraAttrs) {
-        Map<String, MessageAttributeValue> newAttributes = new HashMap<>(request.getMessageAttributes());
+        Map<String, MessageAttributeValue> newAttributes = new HashMap<>(request.messageAttributes());
         newAttributes.putAll(extraAttrs);
 
-        // Clone to create a shallow copy that includes the superclass properties.
-        return request.clone()
-                .withQueueUrl(request.getQueueUrl())
-                .withMessageBody(request.getMessageBody())
-                .withMessageAttributes(newAttributes)
-                .withDelaySeconds(request.getDelaySeconds());
+        // Create a shallow copy that includes the superclass properties.
+        return request.toBuilder().copy()
+                .queueUrl(request.queueUrl())
+                .messageBody(request.messageBody())
+                .messageAttributes(newAttributes)
+                .delaySeconds(request.delaySeconds()).build();
     }
     
     /**
@@ -217,7 +225,7 @@ public class SQSQueueUtils {
             toReturn = future.get();
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new AmazonClientException(
+            throw SdkClientException.create(
                     "Thread interrupted while waiting for execution result", ie);
         } catch (ExecutionException ee) {
             // if the cause of the execution exception is an SQS exception, extract it
@@ -225,11 +233,11 @@ public class SQSQueueUtils {
             // otherwise, wrap ee in an SQS exception and throw that.
             Throwable cause = ee.getCause();
 
-            if (cause instanceof AmazonClientException) {
-                throw (AmazonClientException) cause;
+            if (cause instanceof SdkClientException) {
+                throw (SdkClientException) cause;
             }
 
-            throw new AmazonClientException(
+            throw SdkClientException.create(
                     "Caught an exception while waiting for request to complete...", ee);
         }
 

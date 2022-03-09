@@ -29,9 +29,11 @@ import org.junit.Test;
 
 import com.amazonaws.services.sqs.executors.SerializableReference;
 import com.amazonaws.services.sqs.executors.SerializableRunnable;
-import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
 
 public class SQSScheduledExecutorServiceIT extends IntegrationTest {
 
@@ -66,7 +68,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
         responder = new AmazonSQSResponderClient(sqs);
-        queueUrl = sqs.createQueue(queueNamePrefix + "-RequestQueue").getQueueUrl();
+        queueUrl = sqs.createQueue(CreateQueueRequest.builder().queueName(queueNamePrefix + "-RequestQueue").build()).queueUrl();
         tasksRemaining = new AtomicInteger(1);
         executors.clear();
     }
@@ -80,7 +82,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
     @After
     public void teardown() {
         assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
-        sqs.deleteQueue(queueUrl);
+        sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         responder.shutdown();
         requester.shutdown();
     }

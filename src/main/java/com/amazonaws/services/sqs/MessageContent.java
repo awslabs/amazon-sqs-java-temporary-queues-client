@@ -5,10 +5,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequestEntry;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class MessageContent {
 
@@ -26,7 +26,7 @@ public class MessageContent {
     }
 
     public static MessageContent fromMessage(Message message) {
-        return new MessageContent(message.getBody(), message.getMessageAttributes());
+        return new MessageContent(message.body(), message.messageAttributes());
     }
 
     public String getMessageBody() {
@@ -42,14 +42,14 @@ public class MessageContent {
     }
 
     public SendMessageRequest toSendMessageRequest() {
-        return new SendMessageRequest().withMessageBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
+        return SendMessageRequest.builder().messageBody(messageBody).messageAttributes(new HashMap<>(messageAttributes)).build();
     }
 
     public SendMessageBatchRequestEntry toSendMessageBatchRequestEntry() {
-        return new SendMessageBatchRequestEntry().withMessageBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
+        return SendMessageBatchRequestEntry.builder().messageBody(messageBody).messageAttributes(new HashMap<>(messageAttributes)).build();
     }
     
     public Message toMessage() {
-        return new Message().withBody(messageBody).withMessageAttributes(new HashMap<>(messageAttributes));
+        return Message.builder().body(messageBody).messageAttributes(new HashMap<>(messageAttributes)).build();
     }
 }

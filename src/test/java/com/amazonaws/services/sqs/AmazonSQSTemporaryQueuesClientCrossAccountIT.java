@@ -1,8 +1,5 @@
 package com.amazonaws.services.sqs;
 
-import com.amazonaws.services.sqs.model.AmazonSQSException;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.QueueAttributeName;
 import com.amazonaws.services.sqs.util.AbstractAmazonSQSClientWrapper;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import org.junit.After;
@@ -12,6 +9,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SqsException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,8 +33,8 @@ public class AmazonSQSTemporaryQueuesClientCrossAccountIT extends IntegrationTes
     // Parameterized to emphasize that the same client code for physical SQS queues
     // should work for temporary queues as well, even thought they are virtual.
     private final boolean withTemporaryQueues;
-    private AmazonSQS client;
-    private AmazonSQS otherAccountClient;
+    private SqsClient client;
+    private SqsClient otherAccountClient;
 
     public AmazonSQSTemporaryQueuesClientCrossAccountIT(boolean withTemporaryQueues) {
         this.withTemporaryQueues = withTemporaryQueues;
@@ -45,10 +48,10 @@ public class AmazonSQSTemporaryQueuesClientCrossAccountIT extends IntegrationTes
 
     @After
     public void teardown() {
-        client.shutdown();
+        client.close();
     }
 
-    private AmazonSQS makeTemporaryQueueClient(AmazonSQS sqs) {
+    private SqsClient makeTemporaryQueueClient(SqsClient sqs) {
         if (withTemporaryQueues) {
             AmazonSQSRequesterClientBuilder requesterBuilder =
                     AmazonSQSRequesterClientBuilder.standard()
@@ -72,30 +75,36 @@ public class AmazonSQSTemporaryQueuesClientCrossAccountIT extends IntegrationTes
     public void accessDenied() {
         // Assert that a different principal is not permitted to
         // send to virtual queues
-        String virtualQueueUrl = client.createQueue(queueNamePrefix + "TestQueueWithoutAccess").getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "TestQueueWithoutAccess").build();
+        String virtualQueueUrl = client.createQueue(createQueueRequest).queueUrl();
         try {
-            otherAccountClient.sendMessage(virtualQueueUrl, "Haxxors!!");
+            SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
+                    .queueUrl(virtualQueueUrl).messageBody("Haxxors!!").build();
+            otherAccountClient.sendMessage(sendMessageRequest);
             Assert.fail("Should not have been able to send a message");
-        } catch (AmazonSQSException e) {
+        } catch (SqsException e) {
             // Access Denied
-            assertEquals(403, e.getStatusCode());
+            assertEquals(403, e.statusCode());
         } finally {
-            client.deleteQueue(virtualQueueUrl);
+            client.deleteQueue(DeleteQueueRequest.builder().queueUrl(virtualQueueUrl).build());
         }
     }
 
     @Test
     public void withAccess() {
         String policyString = allowSendMessagePolicy(getBuddyRoleARN()).toJson();
-        CreateQueueRequest createQueueRequest = new CreateQueueRequest()
-                .withQueueName(queueNamePrefix + "TestQueueWithAccess")
-                .withAttributes(Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString));
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "TestQueueWithAccess")
+                .attributesWithStrings(Collections.singletonMap(QueueAttributeName.POLICY.toString(), policyString)).build();
 
-        String queueUrl = client.createQueue(createQueueRequest).getQueueUrl();
+        String queueUrl = client.createQueue(createQueueRequest).queueUrl();
         try {
-            otherAccountClient.sendMessage(queueUrl, "Hi there!");
+            SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
+                    .queueUrl(queueUrl).messageBody("Hi there!").build();
+            otherAccountClient.sendMessage(sendMessageRequest);
         } finally {
-            client.deleteQueue(queueUrl);
+            client.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }
     }
 

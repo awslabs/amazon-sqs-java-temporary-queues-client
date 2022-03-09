@@ -6,25 +6,28 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.Constants;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.amazonaws.services.sqs.util.IntegrationTest;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     
     private static String hostQueueUrl;
-    private static AmazonSQS client;
+    private static SqsClient client;
 
     BiConsumer<String, Message> orphanedMessageHandlerMock;
 
@@ -32,41 +35,45 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     public void setup() {
         orphanedMessageHandlerMock = mock(BiConsumer.class);
         client = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(sqs).withOrphanedMessageHandler(orphanedMessageHandlerMock).build();
-        hostQueueUrl = client.createQueue(queueNamePrefix + "-HostQueue").getQueueUrl();
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(queueNamePrefix + "-HostQueue").build();
+        hostQueueUrl = client.createQueue(createQueueRequest).queueUrl();
     }
 
     @After
     public void teardown() {
         if (hostQueueUrl != null) {
-            client.deleteQueue(hostQueueUrl);
+            client.deleteQueue(DeleteQueueRequest.builder().queueUrl(hostQueueUrl).build());
         }
         if (client != null) {
-            client.shutdown();
+            client.close();
         }
     }
     
     @Test
     public void expiringVirtualQueue() throws InterruptedException {
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName("ShortLived")
-                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
-        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
+        CreateQueueRequest request = CreateQueueRequest.builder()
+                .queueName("ShortLived")
+                .attributesWithStrings(attributes).build();
+        String virtualQueueUrl = client.createQueue(request).queueUrl();
 
         // Do a few long poll receives and validate the queue stays alive.
         // We expect empty receives but not errors.
-        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-                .withQueueUrl(virtualQueueUrl)
-                .withWaitTimeSeconds(5);
+        ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
+                .queueUrl(virtualQueueUrl)
+                .waitTimeSeconds(5).build();
         for (int i = 0; i < 3; i++) {
-            assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+            assertEquals(0, client.receiveMessage(receiveRequest).messages().size());
         }
         
         // Now go idle for a while and the queue should be deleted.
         TimeUnit.SECONDS.sleep(12);
         
         try {
-            client.receiveMessage(virtualQueueUrl);
+            client.receiveMessage(ReceiveMessageRequest.builder().queueUrl(virtualQueueUrl).build());
             fail("Expected queue to be automatically deleted: " + virtualQueueUrl);
         } catch (QueueDoesNotExistException e) {
             // Expected
@@ -75,68 +82,76 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
 
     @Test
     public void ReceiveMessageWaitTimeSecondsNull() {
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName("ReceiveMessageWaitTimeSecondsNull")
-                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "5");
-        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "5");
+        CreateQueueRequest request = CreateQueueRequest.builder()
+                .queueName("ReceiveMessageWaitTimeSecondsNull")
+                .attributesWithStrings(attributes).build();
+        String virtualQueueUrl = client.createQueue(request).queueUrl();
 
         // Do Receive message request with null WaitTimeSeconds.
-        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-                .withQueueUrl(virtualQueueUrl);
+        ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
+                .queueUrl(virtualQueueUrl).build();
         try {
-            assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+            assertEquals(0, client.receiveMessage(receiveRequest).messages().size());
         } catch (NullPointerException npe) {
             fail("NPE not expected with null WaitTimeSeconds on ReceiveMessageRequest");
         }
 
         // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
-        client.deleteQueue(virtualQueueUrl);
+        client.deleteQueue(DeleteQueueRequest.builder().queueUrl(virtualQueueUrl).build());
     }
 
     @Test
     public void virtualQueueShouldNotExpireDuringLongReceive() throws InterruptedException {
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName("ShortLived")
-                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
-        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
+        CreateQueueRequest request = CreateQueueRequest.builder()
+                .queueName("ShortLived")
+                .attributesWithStrings(attributes).build();
+        String virtualQueueUrl = client.createQueue(request).queueUrl();
 
         // Do a single long receive call, longer than the retention period.
         // This tests that the queue is still considered in use during the call
         // and not just at the beginning.
-        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-                .withQueueUrl(virtualQueueUrl)
-                .withWaitTimeSeconds(20);
-        assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+        ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
+                .queueUrl(virtualQueueUrl)
+                .waitTimeSeconds(20).build();
+        assertEquals(0, client.receiveMessage(receiveRequest).messages().size());
 
         // Ensure the queue still exists
-        client.sendMessage(virtualQueueUrl, "Boy I'm sure glad you didn't get deleted");
-        assertEquals(1, client.receiveMessage(receiveRequest).getMessages().size());
+        SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
+                .queueUrl(virtualQueueUrl).messageBody("Boy I'm sure glad you didn't get deleted").build();
+        client.sendMessage(sendMessageRequest);
+        assertEquals(1, client.receiveMessage(receiveRequest).messages().size());
 
         // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
-        client.deleteQueue(virtualQueueUrl);
+        client.deleteQueue(DeleteQueueRequest.builder().queueUrl(virtualQueueUrl).build());
     }
 
     @Test
     public void missingMessageAttributeIsReceivedAndDeleted() throws InterruptedException {
-        CreateQueueRequest request = new CreateQueueRequest()
-                .withQueueName("ShortLived")
-                .addAttributesEntry(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl)
-                .addAttributesEntry(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
-        String virtualQueueUrl = client.createQueue(request).getQueueUrl();
+        HashMap<String, String> attributes = new HashMap<>();
+        attributes.put(Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE, hostQueueUrl);
+        attributes.put(Constants.IDLE_QUEUE_RETENTION_PERIOD, "10");
+        CreateQueueRequest request = CreateQueueRequest.builder()
+                .queueName("ShortLived")
+                .attributesWithStrings(attributes).build();
+        String virtualQueueUrl = client.createQueue(request).queueUrl();
 
-        ReceiveMessageRequest receiveRequest = new ReceiveMessageRequest()
-                .withQueueUrl(virtualQueueUrl)
-                .withWaitTimeSeconds(20);
-        SendMessageRequest sendMessageRequest = new SendMessageRequest()
-                .withQueueUrl(hostQueueUrl)
-                .withMessageBody("Missing Message attributes!")
-                .withDelaySeconds(5);
+        ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
+                .queueUrl(virtualQueueUrl)
+                .waitTimeSeconds(20).build();
+        SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
+                .queueUrl(hostQueueUrl)
+                .messageBody("Missing Message attributes!")
+                .delaySeconds(5).build();
 
         client.sendMessage(sendMessageRequest);
         // Message sent with missing attribute is deleted
-        assertEquals(0, client.receiveMessage(receiveRequest).getMessages().size());
+        assertEquals(0, client.receiveMessage(receiveRequest).messages().size());
         verify(orphanedMessageHandlerMock).accept(any(), any());
     }
 }

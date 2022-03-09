@@ -1,47 +1,49 @@
 package com.amazonaws.services.sqs.util;
 
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.util.List;
 import java.util.function.BiFunction;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.RequestClientOptions.Marker;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.AddPermissionRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityBatchRequest;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueUrlRequest;
-import com.amazonaws.services.sqs.model.ListDeadLetterSourceQueuesRequest;
-import com.amazonaws.services.sqs.model.ListQueueTagsRequest;
-import com.amazonaws.services.sqs.model.ListQueuesRequest;
-import com.amazonaws.services.sqs.model.PurgeQueueRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.RemovePermissionRequest;
-import com.amazonaws.services.sqs.model.SendMessageBatchRequest;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.TagQueueRequest;
-import com.amazonaws.services.sqs.model.UntagQueueRequest;
+import software.amazon.awssdk.core.ApiName;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.ListDeadLetterSourceQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueueTagsRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.PurgeQueueRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.RemovePermissionRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.SqsRequest;
+import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
+import software.amazon.awssdk.services.sqs.model.UntagQueueRequest;
 
 public class AbstractAmazonSQSClientWrapperTest {
 
-    private AmazonSQS wrapped = Mockito.mock(AmazonSQS.class);
-    private AmazonSQS wrapper = new Wrapper(wrapped);
+    private SqsClient wrapped = Mockito.mock(SqsClient.class);
+    private SqsClient wrapper = new Wrapper(wrapped);
     
     private static class Wrapper extends AbstractAmazonSQSClientWrapper {
 
-        public Wrapper(AmazonSQS amazonSqsToBeExtended) {
+        public Wrapper(SqsClient amazonSqsToBeExtended) {
             super(amazonSqsToBeExtended, "WrapperTest");
         }
         
@@ -49,128 +51,118 @@ public class AbstractAmazonSQSClientWrapperTest {
     
     @Test
     public void addPermission() {
-        assertWrappedMethod(AmazonSQS::addPermission, new AddPermissionRequest());
+        assertWrappedMethod(SqsClient::addPermission, AddPermissionRequest.builder().build());
     }
     
     @Test
     public void changeMessageVisibility() {
-        assertWrappedMethod(AmazonSQS::changeMessageVisibility, new ChangeMessageVisibilityRequest());
+        assertWrappedMethod(SqsClient::changeMessageVisibility, ChangeMessageVisibilityRequest.builder().build());
     }
     
     @Test
     public void changeMessageVisibilityBatch() {
-        assertWrappedMethod(AmazonSQS::changeMessageVisibilityBatch, new ChangeMessageVisibilityBatchRequest());
+        assertWrappedMethod(SqsClient::changeMessageVisibilityBatch, ChangeMessageVisibilityBatchRequest.builder().build());
     }
     
     @Test
     public void createQueue() {
-        assertWrappedMethod(AmazonSQS::createQueue, new CreateQueueRequest());
+        assertWrappedMethod(SqsClient::createQueue, CreateQueueRequest.builder().build());
     }
     
     @Test
     public void deleteMessage() {
-        assertWrappedMethod(AmazonSQS::deleteMessage, new DeleteMessageRequest());
+        assertWrappedMethod(SqsClient::deleteMessage, DeleteMessageRequest.builder().build());
     }
     
     @Test
     public void deleteQueue() {
-        assertWrappedMethod(AmazonSQS::deleteQueue, new DeleteQueueRequest());
+        assertWrappedMethod(SqsClient::deleteQueue, DeleteQueueRequest.builder().build());
     }
     
     @Test
     public void deleteMessageBatch() {
-        assertWrappedMethod(AmazonSQS::deleteMessageBatch, new DeleteMessageBatchRequest());
+        assertWrappedMethod(SqsClient::deleteMessageBatch, DeleteMessageBatchRequest.builder().build());
     }
     
     @Test
     public void getQueueAttributes() {
-        assertWrappedMethod(AmazonSQS::getQueueAttributes, new GetQueueAttributesRequest());
+        assertWrappedMethod(SqsClient::getQueueAttributes, GetQueueAttributesRequest.builder().build());
     }
     
     @Test
     public void getQueueUrl() {
-        assertWrappedMethod(AmazonSQS::getQueueUrl, new GetQueueUrlRequest());
+        assertWrappedMethod(SqsClient::getQueueUrl, GetQueueUrlRequest.builder().build());
     }
     
     @Test
     public void listDeadLetterSourceQueues() {
-        assertWrappedMethod(AmazonSQS::listDeadLetterSourceQueues, new ListDeadLetterSourceQueuesRequest());
+        assertWrappedMethod(SqsClient::listDeadLetterSourceQueues, ListDeadLetterSourceQueuesRequest.builder().build());
     }
     
     @Test
     public void listQueues() {
-        assertWrappedMethod(AmazonSQS::listQueues, new ListQueuesRequest());
+        assertWrappedMethod(SqsClient::listQueues, ListQueuesRequest.builder().build());
     }
     
     @Test
     public void listQueueTags() {
-        assertWrappedMethod(AmazonSQS::listQueueTags, new ListQueueTagsRequest());
+        assertWrappedMethod(SqsClient::listQueueTags, ListQueueTagsRequest.builder().build());
     }
     
     @Test
     public void purgeQueue() {
-        assertWrappedMethod(AmazonSQS::purgeQueue, new PurgeQueueRequest());
+        assertWrappedMethod(SqsClient::purgeQueue, PurgeQueueRequest.builder().build());
     }
     
     @Test
     public void receiveMessage() {
-        assertWrappedMethod(AmazonSQS::receiveMessage, new ReceiveMessageRequest());
+        assertWrappedMethod(SqsClient::receiveMessage, ReceiveMessageRequest.builder().build());
     }
     
     @Test
     public void removePermission() {
-        assertWrappedMethod(AmazonSQS::removePermission, new RemovePermissionRequest());
+        assertWrappedMethod(SqsClient::removePermission, RemovePermissionRequest.builder().build());
     }
     
     @Test
     public void sendMessage() {
-        assertWrappedMethod(AmazonSQS::sendMessage, new SendMessageRequest());
+        assertWrappedMethod(SqsClient::sendMessage, SendMessageRequest.builder().build());
     }
     
     @Test
     public void sendMessageBatch() {
-        assertWrappedMethod(AmazonSQS::sendMessageBatch, new SendMessageBatchRequest());
+        assertWrappedMethod(SqsClient::sendMessageBatch, SendMessageBatchRequest.builder().build());
     }
     
     @Test
     public void setQueueAttributes() {
-        assertWrappedMethod(AmazonSQS::setQueueAttributes, new SetQueueAttributesRequest());
+        assertWrappedMethod(SqsClient::setQueueAttributes, SetQueueAttributesRequest.builder().build());
     }
     
     @Test
     public void tagQueue() {
-        assertWrappedMethod(AmazonSQS::tagQueue, new TagQueueRequest());
+        assertWrappedMethod(SqsClient::tagQueue, TagQueueRequest.builder().build());
     }
     
     @Test
     public void untagQueue() {
-        assertWrappedMethod(AmazonSQS::untagQueue, new UntagQueueRequest());
+        assertWrappedMethod(SqsClient::untagQueue, UntagQueueRequest.builder().build());
     }
     
     @Test
-    public void getCachedResponseMetadata() {
-        ListQueuesRequest request = new ListQueuesRequest();
-        wrapper.getCachedResponseMetadata(request);
-        verify(wrapped).getCachedResponseMetadata(request);
+    public void close() {
+        wrapper.close();
+        verify(wrapped, never()).close();
     }
     
-    @Test
-    public void setEndpoint() {
-        wrapper.setEndpoint("foobar.com");
-        verify(wrapped).setEndpoint("foobar.com");
-    }
-    
-    @Test
-    public void shutdown() {
-        wrapper.shutdown();
-        verify(wrapped, never()).shutdown();
-    }
-    
-    private <T extends AmazonWebServiceRequest> void assertWrappedMethod(BiFunction<AmazonSQS, T, ?> method, T request) {
+    private <T extends SqsRequest> void assertWrappedMethod(BiFunction<SqsClient, T, ?> method, T request) {
         method.apply(wrapper, request);
-        
-        method.apply(verify(wrapped), request);
-        
-        Assert.assertTrue(request.getRequestClientOptions().getClientMarker(Marker.USER_AGENT).contains("WrapperTest"));
+
+        ArgumentCaptor<SqsRequest> argumentCaptor = ArgumentCaptor.forClass(request.getClass());
+        method.apply(verify(wrapped), (T) argumentCaptor.capture());
+        SqsRequest value = argumentCaptor.getValue();
+
+        Assert.assertEquals(request.getClass(), value.getClass());
+        Assert.assertTrue(value.overrideConfiguration().get().apiNames().get(0).name().equals("WrapperTest"));
     }
 }
