@@ -1,21 +1,13 @@
 package com.amazonaws.services.sqs;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 import com.amazonaws.services.sqs.util.Constants;
-import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
 import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -24,6 +16,15 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
@@ -32,7 +33,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
     private static AmazonSQSRequester requester;
     private static AmazonSQSResponder responder;
 
-    @Before
+    @BeforeEach
     public void setup() {
         client = new AmazonSQSIdleQueueDeletingClient(sqs, queueNamePrefix);
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
@@ -40,7 +41,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         responder = new AmazonSQSResponderClient(sqs);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         if (client != null && queueUrl != null) {
             try {
@@ -71,8 +72,8 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         queueUrl = client.createQueue(createQueueRequest).queueUrl();
         
         // May have to wait for up to a minute for the new queue to show up in ListQueues
-        Assert.assertTrue("Expected queue to be deleted: " + queueUrl,
-                          SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
+        assertTrue(SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS),
+                "Expected queue to be deleted: " + queueUrl);
     }
 
     @Test
@@ -99,7 +100,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
         String updatedHeartbeat = getLastHeartbeatTimestamp();
 
-        Assert.assertNotEquals(initialHeartBeat, updatedHeartbeat);
+        assertNotEquals(initialHeartBeat, updatedHeartbeat);
     }
 
     private String getLastHeartbeatTimestamp() {
@@ -131,7 +132,7 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
 
         String notUpdatedHeartbeat = getLastHeartbeatTimestamp();
 
-        Assert.assertEquals(initialHeartBeat, notUpdatedHeartbeat);
+        assertEquals(initialHeartBeat, notUpdatedHeartbeat);
     }
     
     @Test
@@ -153,14 +154,14 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
         sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         
         // Sleeping is unfortunate here, but it's necessary to ensure the eventual consistency
-        // of the delete is resolved first. Otherwise it's easy to get a false positive below.
+        // of the delete is resolved first. Otherwise, it's easy to get a false positive below.
         TimeUnit.MINUTES.sleep(1);
         
         // Ensure the original queue is eventually recreated. This becoming true at least once
         // indicates that CreateQueue was successfully called, even if it may flip back to false
         // on subsequent calls.
-        Assert.assertTrue("Expected original queue to be recreated: " + queueUrl, 
-                          SQSQueueUtils.awaitQueueCreated(sqs, queueUrl, 70, TimeUnit.SECONDS));
+        assertTrue(SQSQueueUtils.awaitQueueCreated(sqs, queueUrl, 70, TimeUnit.SECONDS),
+                "Expected original queue to be recreated: " + queueUrl);
         
         // Ensure the user doesn't experience any send or receive failures
         user.finish();
@@ -180,10 +181,10 @@ public class AmazonSQSIdleQueueDeletingIT extends IntegrationTest {
             }
         });
         
-        Assert.assertTrue("Expected original queue to be deleted: " + failoverQueueUrl, 
-                SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS));
-        Assert.assertTrue("Expected failover queue to be deleted with the original: " + failoverQueueUrl, 
-                SQSQueueUtils.awaitQueueDeleted(sqs, failoverQueueUrl, 70, TimeUnit.SECONDS));
+        assertTrue(SQSQueueUtils.awaitQueueDeleted(sqs, queueUrl, 70, TimeUnit.SECONDS),
+                "Expected original queue to be deleted: " + failoverQueueUrl);
+        assertTrue(SQSQueueUtils.awaitQueueDeleted(sqs, failoverQueueUrl, 70, TimeUnit.SECONDS),
+                "Expected failover queue to be deleted with the original: " + failoverQueueUrl);
     }
     
     private class QueueUser {

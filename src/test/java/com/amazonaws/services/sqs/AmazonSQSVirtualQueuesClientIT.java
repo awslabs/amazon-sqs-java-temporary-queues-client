@@ -1,21 +1,10 @@
 package com.amazonaws.services.sqs;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-
-import java.util.HashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
-
 import com.amazonaws.services.sqs.util.Constants;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.amazonaws.services.sqs.util.IntegrationTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
@@ -24,6 +13,16 @@ import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
 public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
     
     private static String hostQueueUrl;
@@ -31,7 +30,7 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
 
     BiConsumer<String, Message> orphanedMessageHandlerMock;
 
-    @Before
+    @BeforeEach
     public void setup() {
         orphanedMessageHandlerMock = mock(BiConsumer.class);
         client = AmazonSQSVirtualQueuesClientBuilder.standard().withAmazonSQS(sqs).withOrphanedMessageHandler(orphanedMessageHandlerMock).build();
@@ -40,7 +39,7 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         hostQueueUrl = client.createQueue(createQueueRequest).queueUrl();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         if (hostQueueUrl != null) {
             client.deleteQueue(DeleteQueueRequest.builder().queueUrl(hostQueueUrl).build());
@@ -71,13 +70,9 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         
         // Now go idle for a while and the queue should be deleted.
         TimeUnit.SECONDS.sleep(12);
-        
-        try {
-            client.receiveMessage(ReceiveMessageRequest.builder().queueUrl(virtualQueueUrl).build());
-            fail("Expected queue to be automatically deleted: " + virtualQueueUrl);
-        } catch (QueueDoesNotExistException e) {
-            // Expected
-        }
+
+        assertThrows(QueueDoesNotExistException.class,
+                () -> client.receiveMessage(ReceiveMessageRequest.builder().queueUrl(virtualQueueUrl).build()));
     }
 
     @Test
@@ -93,13 +88,11 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         // Do Receive message request with null WaitTimeSeconds.
         ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
                 .queueUrl(virtualQueueUrl).build();
-        try {
-            assertEquals(0, client.receiveMessage(receiveRequest).messages().size());
-        } catch (NullPointerException npe) {
-            fail("NPE not expected with null WaitTimeSeconds on ReceiveMessageRequest");
-        }
 
-        // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
+        assertThrows(NullPointerException.class,
+                () -> assertEquals(0, client.receiveMessage(receiveRequest).messages().size()));
+
+        // Delete the queue, so we don't get a spurious message about it expiring during the test shutdown
         client.deleteQueue(DeleteQueueRequest.builder().queueUrl(virtualQueueUrl).build());
     }
 
@@ -127,7 +120,7 @@ public class AmazonSQSVirtualQueuesClientIT extends IntegrationTest {
         client.sendMessage(sendMessageRequest);
         assertEquals(1, client.receiveMessage(receiveRequest).messages().size());
 
-        // Delete the queue so we don't get a spurious message about it expiring during the test shutdown
+        // Delete the queue, so we don't get a spurious message about it expiring during the test shutdown
         client.deleteQueue(DeleteQueueRequest.builder().queueUrl(virtualQueueUrl).build());
     }
 

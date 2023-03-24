@@ -1,10 +1,7 @@
 package com.amazonaws.services.sqs.util;
 
-import java.util.Collections;
-import java.util.concurrent.ThreadLocalRandom;
-
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.core.auth.policy.Action;
 import software.amazon.awssdk.core.auth.policy.Policy;
@@ -23,17 +20,17 @@ import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
+import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assume.assumeNoException;
-import static org.junit.Assume.assumeThat;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 
 /**
  * Base class for integration tests
  */
 public abstract class IntegrationTest {
-    
+
     protected SqsClient sqs;
     // UUIDs are too long for this
     protected String queueNamePrefix = "__" + testSuiteName() + "-" + ThreadLocalRandom.current().nextInt(1000000);
@@ -46,12 +43,12 @@ public abstract class IntegrationTest {
         return getClass().getSimpleName();
     }
 
-    @Before
+    @BeforeEach
     public void setupSQSClient() {
         sqs = SqsClient.create();
     }
-    
-    @After
+
+    @AfterEach
     public void teardownSQSClient() {
         if (sqs != null) {
             // Best effort cleanup of queues. To be complete, we'd have to wait a minute
@@ -71,7 +68,7 @@ public abstract class IntegrationTest {
     protected String getBuddyRoleARN() {
         String roleARN = System.getenv("BUDDY_ROLE_ARN");
         if (roleARN == null) {
-            assumeTrue("This test requires a second 'buddy' AWS role, provided with the BUDDY_ROLE_ARN environment variable.", false);
+            assumeTrue(false, "This test requires a second 'buddy' AWS role, provided with the BUDDY_ROLE_ARN environment variable.");
         }
         return roleARN;
     }
@@ -96,10 +93,10 @@ public abstract class IntegrationTest {
         try {
             SendMessageRequest sendMessageRequest = SendMessageRequest.builder().queueUrl(queueUrl).messageBody("Haxxors!!").build();
             client.sendMessage(sendMessageRequest);
-            assumeTrue("The buddy credentials should not authorize sending to arbitrary queues", false);
+            assumeTrue(false, "The buddy credentials should not authorize sending to arbitrary queues");
         } catch (SqsException e) {
             // Access Denied
-            assumeThat(e.statusCode(), equalTo(403));
+            assumeTrue(e.statusCode() == 403);
         } finally {
             sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }

@@ -1,6 +1,6 @@
 package com.amazonaws.services.sqs.util;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
@@ -8,7 +8,7 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class SQSQueueUtilsTest {
 
@@ -65,7 +65,7 @@ public class SQSQueueUtilsTest {
             Object value = field.get(instance);
 
             // We don't have primitives in our models. So doing a NotNull check should be enough
-            assertNotNull("Non-primitive fields should not be null, but " + field.getName() + " was null", value);
+            assertNotNull(value, "Non-primitive fields should not be null, but " + field.getName() + " was null");
         }
     }
 }

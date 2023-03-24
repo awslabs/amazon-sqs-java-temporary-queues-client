@@ -1,22 +1,13 @@
 package com.amazonaws.services.sqs.util;
 
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-
-import java.util.List;
-import java.util.function.BiFunction;
-
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import software.amazon.awssdk.core.ApiName;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.AddPermissionRequest;
-import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityBatchRequest;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
@@ -36,10 +27,16 @@ import software.amazon.awssdk.services.sqs.model.SqsRequest;
 import software.amazon.awssdk.services.sqs.model.TagQueueRequest;
 import software.amazon.awssdk.services.sqs.model.UntagQueueRequest;
 
+import java.util.function.BiFunction;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 public class AbstractAmazonSQSClientWrapperTest {
 
-    private SqsClient wrapped = Mockito.mock(SqsClient.class);
-    private SqsClient wrapper = new Wrapper(wrapped);
+    private final SqsClient wrapped = Mockito.mock(SqsClient.class);
+    private final SqsClient wrapper = new Wrapper(wrapped);
     
     private static class Wrapper extends AbstractAmazonSQSClientWrapper {
 
@@ -162,7 +159,7 @@ public class AbstractAmazonSQSClientWrapperTest {
         method.apply(verify(wrapped), (T) argumentCaptor.capture());
         SqsRequest value = argumentCaptor.getValue();
 
-        Assert.assertEquals(request.getClass(), value.getClass());
-        Assert.assertTrue(value.overrideConfiguration().get().apiNames().get(0).name().equals("WrapperTest"));
+        assertEquals(request.getClass(), value.getClass());
+        assertEquals("WrapperTest", value.overrideConfiguration().get().apiNames().get(0).name());
     }
 }
