@@ -1,19 +1,18 @@
 package com.amazonaws.services.sqs;
 
-import static org.junit.Assert.assertEquals;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.util.IntegrationTest;
-import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
-import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
-import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AmazonSQSTemporaryQueuesClientBuilderIT extends IntegrationTest {
 

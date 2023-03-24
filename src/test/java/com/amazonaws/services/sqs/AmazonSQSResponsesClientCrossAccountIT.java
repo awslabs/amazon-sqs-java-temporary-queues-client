@@ -3,9 +3,9 @@ package com.amazonaws.services.sqs;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
@@ -16,7 +16,7 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
     private static AmazonSQSRequester sqsRequester;
@@ -28,7 +28,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
         return "SQSXAccountResponsesClientIT";
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         // Use the secondary role for the responder
         sqsResponder = new AmazonSQSResponderClient(getBuddyPrincipalClient());
@@ -43,7 +43,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
         requestQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(requestQueueUrl).build());
         sqsResponder.shutdown();

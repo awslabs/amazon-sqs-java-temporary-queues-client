@@ -1,30 +1,29 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.util.Constants.IDLE_QUEUE_RETENTION_PERIOD;
-import static com.amazonaws.services.sqs.util.Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE;
-import static org.junit.Assert.assertNotNull;
-
-import java.util.Collections;
-import java.util.Map;
-
 import com.amazonaws.services.sqs.util.Constants;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.amazonaws.services.sqs.util.IntegrationTest;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+
+import java.util.Collections;
+import java.util.Map;
+
+import static com.amazonaws.services.sqs.util.Constants.IDLE_QUEUE_RETENTION_PERIOD;
+import static com.amazonaws.services.sqs.util.Constants.VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     private AmazonSQSTemporaryQueuesClient client;
     private String queueUrl;
     
-    @After
+    @AfterEach
     public void teardown() {
         if (queueUrl != null) {
             client.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
@@ -41,7 +40,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     @Test
     public void createQueueWithUnsupportedAttributes() {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             setupClient(null);
             client.createQueue(CreateQueueRequest.builder()
                     .queueName(queueNamePrefix + "InvalidQueue")
@@ -56,7 +55,7 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
 
     @Test
     public void createQueueWithUnsupportedIdleQueueRetentionPeriod() {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             setupClient(-10L);
         });
     }
@@ -86,11 +85,11 @@ public class AmazonSQSTemporaryQueuesClientIT extends IntegrationTest {
         Map<String, String> attributes = client.getQueueAttributes(getQueueAttributesRequest).attributesAsStrings();
         String hostQueueUrl = attributes.get(VIRTUAL_QUEUE_HOST_QUEUE_ATTRIBUTE);
         assertNotNull(hostQueueUrl);
-        Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), attributes.get(IDLE_QUEUE_RETENTION_PERIOD));
+        assertEquals(Long.toString(idleQueueRetentionPeriod), attributes.get(IDLE_QUEUE_RETENTION_PERIOD));
 
         GetQueueAttributesRequest hostGetQueueAttributes = GetQueueAttributesRequest.builder()
                 .queueUrl(queueUrl).attributeNamesWithStrings(Collections.singletonList("All")).build();
         Map<String, String> hostQueueAttributes = client.getQueueAttributes(hostGetQueueAttributes).attributesAsStrings();
-        Assert.assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(Constants.IDLE_QUEUE_RETENTION_PERIOD));
+        assertEquals(Long.toString(idleQueueRetentionPeriod), hostQueueAttributes.get(Constants.IDLE_QUEUE_RETENTION_PERIOD));
     }
 }

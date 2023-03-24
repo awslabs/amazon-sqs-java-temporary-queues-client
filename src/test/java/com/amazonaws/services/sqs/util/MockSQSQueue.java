@@ -96,7 +96,7 @@ public class MockSQSQueue {
     }
     
     public UntagQueueResponse untagQueue(UntagQueueRequest request) {
-        tags.keySet().removeAll(request.tagKeys());
+        request.tagKeys().forEach(tags.keySet()::remove);
         return UntagQueueResponse.builder().build();
     }
     

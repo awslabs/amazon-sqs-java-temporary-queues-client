@@ -1,12 +1,19 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.executors.DeduplicatedCallable.deduplicated;
-import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
-import static com.amazonaws.services.sqs.executors.SerializableCallable.serializable;
-import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import com.amazonaws.services.sqs.executors.SerializableCallable;
+import com.amazonaws.services.sqs.executors.SerializableReference;
+import com.amazonaws.services.sqs.executors.SerializableRunnable;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
 import java.io.ObjectStreamException;
 import java.io.Serializable;
@@ -31,29 +38,22 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.executors.SerializableCallable;
-import com.amazonaws.services.sqs.executors.SerializableReference;
-import com.amazonaws.services.sqs.executors.SerializableRunnable;
-import com.amazonaws.services.sqs.util.IntegrationTest;
-import com.amazonaws.services.sqs.util.SQSQueueUtils;
-import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
-import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
-import software.amazon.awssdk.services.sqs.model.ListQueuesRequest;
-import software.amazon.awssdk.services.sqs.model.Message;
-import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
+import static com.amazonaws.services.sqs.executors.DeduplicatedCallable.deduplicated;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
+import static com.amazonaws.services.sqs.executors.SerializableCallable.serializable;
+import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SQSExecutorServiceIT extends IntegrationTest {
 
     private static AmazonSQSRequester requester;
     private static AmazonSQSResponder responder;
     private static String queueUrl;
-    private static List<SQSExecutorService> executors = new ArrayList<>();
-    private static AtomicInteger seedCount = new AtomicInteger();
+    private static final List<SQSExecutorService> executors = new ArrayList<>();
+    private static final AtomicInteger seedCount = new AtomicInteger();
     private static CountDownLatch tasksCompletedLatch;
 
     private static class SQSExecutorWithAssertions extends SQSExecutorService implements Serializable {
@@ -75,7 +75,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         }
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
@@ -86,7 +86,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         executors.clear();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         try {
             assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
@@ -117,15 +117,11 @@ public class SQSExecutorServiceIT extends IntegrationTest {
         seedCount.incrementAndGet();
         IntStream.range(0, 5)
                  .map(x -> x * 5)
-                 .forEach(y -> {
-                    executor.execute((SerializableRunnable)() -> sweepParent(executor, y)); 
-        });
+                 .forEach(y -> executor.execute((SerializableRunnable)() -> sweepParent(executor, y)));
     }
 
     private static void sweepParent(Executor executor, int number) {
-        IntStream.range(number + 1, number + 5).forEach(x -> {
-            executor.execute((SerializableRunnable)() -> sweepLeaf(executor, x));
-        });
+        IntStream.range(number + 1, number + 5).forEach(x -> executor.execute((SerializableRunnable)() -> sweepLeaf(executor, x)));
     }
 
     private static void sweepLeaf(Executor executor, int number) {
@@ -146,7 +142,7 @@ public class SQSExecutorServiceIT extends IntegrationTest {
     public void singleSubmitRunnable() throws InterruptedException, ExecutionException, TimeoutException {
         SQSExecutorService executor = createExecutor(queueUrl);
         Future<?> future = executor.submit(serializable(() -> sweepLeaf(executor, 42)));
-        assertEquals(null, future.get(2, TimeUnit.SECONDS));
+        assertNull(future.get(2, TimeUnit.SECONDS));
         future.cancel(true);
     }
 

@@ -1,22 +1,21 @@
 package com.amazonaws.services.sqs;
 
-import static org.junit.Assert.assertEquals;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.util.IntegrationTest;
-import com.amazonaws.services.sqs.util.SQSMessageConsumer;
-import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
-import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
-import software.amazon.awssdk.services.sqs.model.Message;
-import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AmazonSQSResponsesClientIT extends IntegrationTest {
     private static AmazonSQSRequester sqsRequester;
@@ -24,7 +23,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
     private static String requestQueueUrl;
 
 
-    @Before
+    @BeforeEach
     public void setup() {
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
@@ -34,7 +33,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
         requestQueueUrl = sqs.createQueue(createQueueRequest).queueUrl();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         sqs.deleteQueue(DeleteQueueRequest.builder().queueUrl(requestQueueUrl).build());
         sqsResponder.shutdown();
