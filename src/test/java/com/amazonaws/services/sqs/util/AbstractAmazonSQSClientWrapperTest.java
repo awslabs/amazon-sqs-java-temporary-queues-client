@@ -1,15 +1,6 @@
 package com.amazonaws.services.sqs.util;
 
 
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-
-import java.util.function.BiFunction;
-
-import org.junit.Assert;
-import org.junit.Test;
-import org.mockito.Mockito;
-
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.RequestClientOptions.Marker;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -33,6 +24,14 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SetQueueAttributesRequest;
 import com.amazonaws.services.sqs.model.TagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.function.BiFunction;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class AbstractAmazonSQSClientWrapperTest {
 
@@ -171,6 +170,6 @@ public class AbstractAmazonSQSClientWrapperTest {
         
         method.apply(verify(wrapped), request);
         
-        Assert.assertTrue(request.getRequestClientOptions().getClientMarker(Marker.USER_AGENT).contains("WrapperTest"));
+        assertTrue(request.getRequestClientOptions().getClientMarker(Marker.USER_AGENT).contains("WrapperTest"));
     }
 }

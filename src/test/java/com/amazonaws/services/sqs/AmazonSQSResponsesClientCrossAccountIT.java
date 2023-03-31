@@ -6,15 +6,15 @@ import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.util.IntegrationTest;
 import com.amazonaws.services.sqs.util.SQSMessageConsumer;
 import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
     private static AmazonSQSRequester sqsRequester;
@@ -26,7 +26,7 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
         return "SQSXAccountResponsesClientIT";
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         // Use the secondary role for the responder
         sqsResponder = new AmazonSQSResponderClient(getBuddyPrincipalClient());
@@ -36,10 +36,10 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
                 Collections.singletonMap(QueueAttributeName.Policy.toString(), policyString),
                 exceptionHandler);
 
-        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
+        requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID()).getQueueUrl();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         sqs.deleteQueue(requestQueueUrl);
         sqsResponder.shutdown();
@@ -51,10 +51,8 @@ public class AmazonSQSResponsesClientCrossAccountIT extends IntegrationTest {
         SQSMessageConsumer consumer = SQSMessageConsumerBuilder.standard()
                 .withAmazonSQS(sqs)
                 .withQueueUrl(requestQueueUrl)
-                .withConsumer(message -> {
-                    sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
-                            new MessageContent("Right back atcha buddy!"));
-                })
+                .withConsumer(message -> sqsResponder.sendResponseMessage(MessageContent.fromMessage(message),
+                        new MessageContent("Right back atcha buddy!")))
                 .build();
         consumer.start();
         try {

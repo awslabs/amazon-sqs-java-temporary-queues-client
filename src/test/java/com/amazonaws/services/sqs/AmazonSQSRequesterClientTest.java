@@ -1,10 +1,13 @@
 package com.amazonaws.services.sqs;
 
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.util.Constants;
+import com.amazonaws.services.sqs.util.ExceptionAsserter;
+import com.amazonaws.services.sqs.util.MockSQS;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
@@ -12,15 +15,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.sqs.util.Constants;
-import org.junit.After;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.util.ExceptionAsserter;
-import com.amazonaws.services.sqs.util.MockSQS;
-import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AmazonSQSRequesterClientTest {
     
@@ -32,7 +30,7 @@ public class AmazonSQSRequesterClientTest {
     private final AmazonSQSResponderClient responderClient;
     
     public AmazonSQSRequesterClientTest() {
-        this.accountPrefix = "http://queue.amazon.com/123456789012/";
+        this.accountPrefix = "https://queue.amazon.com/123456789012/";
         this.sqs = new MockSQS(accountPrefix);
         this.requesterClient = new AmazonSQSRequesterClient(sqs, "RequesterClientQueues",
                                                             Collections.emptyMap(),
@@ -40,7 +38,7 @@ public class AmazonSQSRequesterClientTest {
         this.responderClient = new AmazonSQSResponderClient(sqs);
     }
     
-    @After
+    @AfterEach
     public void tearDown() {
         this.exceptionHandler.assertNothingThrown();
     }
@@ -86,14 +84,9 @@ public class AmazonSQSRequesterClientTest {
         assertEquals(requestMessageBody, requestMessage.getBody());
         String responseQueueUrl = requestMessage.getMessageAttributes().get(Constants.RESPONSE_QUEUE_URL_ATTRIBUTE_NAME).getStringValue();
         assertNotNull(responseQueueUrl);
-        
-        // TODO-RS: Junit 5
-        try {
-            future.get();
-            fail();
-        } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(TimeoutException.class));
-        }
+
+        Exception exception = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(TimeoutException.class, exception.getCause());
         
         // Make sure the response queue was deleted
         SQSQueueUtils.awaitQueueDeleted(sqs, responseQueueUrl, 70, TimeUnit.SECONDS);

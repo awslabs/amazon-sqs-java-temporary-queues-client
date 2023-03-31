@@ -1,20 +1,19 @@
 package com.amazonaws.services.sqs;
 
-import static org.junit.Assert.assertEquals;
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.sqs.util.SQSMessageConsumerBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.amazonaws.services.sqs.util.IntegrationTest;
-import com.amazonaws.services.sqs.util.SQSMessageConsumer;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AmazonSQSResponsesClientIT extends IntegrationTest {
     private static AmazonSQSRequester sqsRequester;
@@ -22,7 +21,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
     private static String requestQueueUrl;
 
 
-    @Before
+    @BeforeEach
     public void setup() {
         sqsRequester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
@@ -30,7 +29,7 @@ public class AmazonSQSResponsesClientIT extends IntegrationTest {
         requestQueueUrl = sqs.createQueue("RequestQueue-" + UUID.randomUUID().toString()).getQueueUrl();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         sqs.deleteQueue(requestQueueUrl);
         sqsResponder.shutdown();

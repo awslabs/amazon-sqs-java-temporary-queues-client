@@ -1,9 +1,5 @@
 package com.amazonaws.services.sqs.util;
 
-import java.util.Collections;
-import java.util.concurrent.ThreadLocalRandom;
-
-import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.policy.Policy;
@@ -11,25 +7,17 @@ import com.amazonaws.auth.policy.Principal;
 import com.amazonaws.auth.policy.Resource;
 import com.amazonaws.auth.policy.Statement;
 import com.amazonaws.auth.policy.actions.SQSActions;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
-import com.amazonaws.services.securitytoken.model.AssumeRoleResult;
-import com.amazonaws.services.securitytoken.model.Credentials;
-import com.amazonaws.services.securitytoken.model.GetCallerIdentityRequest;
-import com.amazonaws.services.sqs.model.AmazonSQSException;
-import org.junit.After;
-import org.junit.Before;
-
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sqs.model.AmazonSQSException;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assume.assumeNoException;
-import static org.junit.Assume.assumeThat;
-import static org.junit.Assume.assumeTrue;
+import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Base class for integration tests
@@ -48,12 +36,12 @@ public abstract class IntegrationTest {
         return getClass().getSimpleName();
     }
 
-    @Before
+    @BeforeEach
     public void setupSQSClient() {
         sqs = AmazonSQSClientBuilder.defaultClient();
     }
     
-    @After
+    @AfterEach
     public void teardownSQSClient() {
         if (sqs != null) {
             // Best effort cleanup of queues. To be complete, we'd have to wait a minute
@@ -73,7 +61,7 @@ public abstract class IntegrationTest {
     protected String getBuddyRoleARN() {
         String roleARN = System.getenv("BUDDY_ROLE_ARN");
         if (roleARN == null) {
-            assumeTrue("This test requires a second 'buddy' AWS role, provided with the BUDDY_ROLE_ARN environment variable.", false);
+            assumeTrue(false, "This test requires a second 'buddy' AWS role, provided with the BUDDY_ROLE_ARN environment variable.");
         }
         return roleARN;
     }
@@ -93,10 +81,10 @@ public abstract class IntegrationTest {
         String queueUrl = sqs.createQueue(queueNamePrefix + "TestQueue").getQueueUrl();
         try {
             client.sendMessage(queueUrl, "Haxxors!!");
-            assumeTrue("The buddy credentials should not authorize sending to arbitrary queues", false);
+            assumeTrue(false, "The buddy credentials should not authorize sending to arbitrary queues");
         } catch (AmazonSQSException e) {
             // Access Denied
-            assumeThat(e.getStatusCode(), equalTo(403));
+            assumeTrue(e.getStatusCode() == 403);
         } finally {
             sqs.deleteQueue(queueUrl);
         }
