@@ -1,10 +1,5 @@
 package com.amazonaws.services.sqs.util;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import com.amazonaws.services.sqs.AbstractAmazonSQS;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
 import com.amazonaws.services.sqs.model.ChangeMessageVisibilityResult;
@@ -27,6 +22,11 @@ import com.amazonaws.services.sqs.model.TagQueueRequest;
 import com.amazonaws.services.sqs.model.TagQueueResult;
 import com.amazonaws.services.sqs.model.UntagQueueRequest;
 import com.amazonaws.services.sqs.model.UntagQueueResult;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class MockSQS extends AbstractAmazonSQS {
     private final String accountPrefix;

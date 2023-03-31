@@ -2,19 +2,18 @@ package com.amazonaws.services.sqs.util;
 
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class SQSQueueUtilsTest {
 
     /**
      * This test fails if a new member is added to SendMessageRequest class.
-     *
      * This acts as a reminder to notify us to update the
      * {@link SQSQueueUtils#copyWithExtraAttributes(SendMessageRequest, Map)} method when a
      * member is added to {@link SendMessageRequest}.
@@ -39,7 +38,6 @@ public class SQSQueueUtilsTest {
 
     /**
      * This test fails if a new member is added to CreateQueueRequest class.
-     *
      * This acts as a reminder to notify us to update the
      * {@link SQSQueueUtils#copyWithExtraAttributes(CreateQueueRequest, Map)} method when a
      * member is added to {@link CreateQueueRequest}.
@@ -65,7 +63,7 @@ public class SQSQueueUtilsTest {
             Object value = field.get(instance);
 
             // We don't have primitives in our models. So doing a NotNull check should be enough
-            assertNotNull("Non-primitive fields should not be null, but " + field.getName() + " was null", value);
+            assertNotNull(value, "Non-primitive fields should not be null, but " + field.getName() + " was null");
         }
     }
 }

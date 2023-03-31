@@ -1,24 +1,17 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
-import static org.junit.Assert.assertEquals;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.AmazonSQSRequester;
-import com.amazonaws.services.sqs.AmazonSQSRequesterClientBuilder;
-import com.amazonaws.services.sqs.AmazonSQSResponder;
-import com.amazonaws.services.sqs.AmazonSQSResponderClientBuilder;
-import com.amazonaws.services.sqs.SQSExecutorService;
-import com.amazonaws.services.sqs.util.IntegrationTest;
+import static com.amazonaws.services.sqs.executors.ExecutorUtils.applyIntOn;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SQSExecutorWithVirtualQueuesIT extends IntegrationTest {
 
@@ -27,7 +20,7 @@ public class SQSExecutorWithVirtualQueuesIT extends IntegrationTest {
     private String requestQueueUrl;
     private SQSExecutorService executor;
 
-    @Before
+    @BeforeEach
     public void setup() {
         requester = AmazonSQSRequesterClientBuilder.standard().withAmazonSQS(sqs).withInternalQueuePrefix(queueNamePrefix).build();
         responder = AmazonSQSResponderClientBuilder.standard().withAmazonSQS(sqs).build();
@@ -35,7 +28,7 @@ public class SQSExecutorWithVirtualQueuesIT extends IntegrationTest {
         executor = new SQSExecutorService(requester, responder, requestQueueUrl, exceptionHandler);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws InterruptedException {
         executor.shutdown();
         executor.awaitTermination(30, TimeUnit.SECONDS);

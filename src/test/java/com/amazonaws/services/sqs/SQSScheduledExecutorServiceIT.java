@@ -1,12 +1,13 @@
 package com.amazonaws.services.sqs;
 
-import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
-import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
-import static org.awaitility.Awaitility.await;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import com.amazonaws.services.sqs.executors.SerializableReference;
+import com.amazonaws.services.sqs.executors.SerializableRunnable;
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.util.IntegrationTest;
+import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.ObjectStreamException;
 import java.io.Serializable;
@@ -23,23 +24,22 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.amazonaws.services.sqs.executors.SerializableReference;
-import com.amazonaws.services.sqs.executors.SerializableRunnable;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.util.IntegrationTest;
-import com.amazonaws.services.sqs.util.SQSQueueUtils;
+import static com.amazonaws.services.sqs.executors.DeduplicatedRunnable.deduplicated;
+import static com.amazonaws.services.sqs.executors.SerializableRunnable.serializable;
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SQSScheduledExecutorServiceIT extends IntegrationTest {
 
     private static AmazonSQSRequester requester;
     private static AmazonSQSResponder responder;
     private static String queueUrl;
-    private static List<SQSExecutorService> executors = new ArrayList<>();
-    private static AtomicInteger seedCount = new AtomicInteger();
+    private static final List<SQSExecutorService> executors = new ArrayList<>();
+    private static final AtomicInteger seedCount = new AtomicInteger();
     private static AtomicInteger tasksRemaining;
 
     private static class SQSScheduledExecutorWithAssertions extends SQSScheduledExecutorService implements Serializable {
@@ -61,7 +61,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         }
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         requester = new AmazonSQSRequesterClient(sqs, queueNamePrefix,
                 Collections.emptyMap(), exceptionHandler);
@@ -77,7 +77,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
                .untilAtomic(tasksRemaining, equalTo(0));
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         assertTrue(executors.parallelStream().allMatch(this::shutdownExecutor));
         sqs.deleteQueue(queueUrl);
@@ -105,15 +105,11 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         seedCount.incrementAndGet();
         IntStream.range(0, 5)
                  .map(x -> x * 5)
-                 .forEach(y -> {
-                     executor.execute((SerializableRunnable)() -> sweepParent(executor, y)); 
-                 });
+                 .forEach(y -> executor.execute((SerializableRunnable)() -> sweepParent(executor, y)));
     }
 
     private static void sweepParent(Executor executor, int number) {
-        IntStream.range(number + 1, number + 5).forEach(x -> {
-            executor.execute((SerializableRunnable)() -> sweepLeaf(executor, x));
-        });
+        IntStream.range(number + 1, number + 5).forEach(x -> executor.execute((SerializableRunnable)() -> sweepLeaf(executor, x)));
     }
 
     private static void sweepLeaf(Executor executor, int number) {
@@ -198,13 +194,7 @@ public class SQSScheduledExecutorServiceIT extends IntegrationTest {
         future.cancel(true);
         assertTrue(future.isDone());
         assertTrue(future.isCancelled());
-        // TODO-RS: Switch to JUnit 5
-        try {
-            future.get();
-            fail("Expected CancellationException");
-        } catch (CancellationException e) {
-            // Expected
-        }
+        assertThrows(CancellationException.class, future::get);
 
         // ...and that the message gets purged from the queue
         assertTrue(SQSQueueUtils.awaitEmptyQueue(sqs, queueUrl, 10, TimeUnit.SECONDS));
